@@ -14,30 +14,26 @@
     "test:watch": "bun test --watch",
     "test:coverage": "bun test --coverage",
     "build": "bun build ./src/index.ts --outdir ./dist --target node",
-    "prepublishOnly": "bun run build"
+    "prepublishOnly": "bun run build",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write ."
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
+  "files": ["dist", "README.md", "LICENSE"],
   "publishConfig": {
     "access": "public"
   },
-  "keywords": [
-    "notion",
-    "markdown",
-    "export",
-    "github"
-  ],
+  "keywords": ["notion", "markdown", "export", "github"],
   "author": "",
   "license": "Apache-2.0",
   "dependencies": {
     "@notionhq/client": "^2.2.13"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
     "@types/node": "^20.0.0",
     "bun-types": "latest",
+    "lefthook": "^1.11.11",
     "typescript": "^5.0.0"
   }
 }

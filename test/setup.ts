@@ -4,15 +4,15 @@
  */
 
 // Set up environment variables for testing
-process.env.NOTION_TOKEN = "test-token";
-process.env.DEBUG = "true";
+process.env.NOTION_TOKEN = "test-token"
+process.env.DEBUG = "true"
 
 // Global setup
-console.log("Setting up test environment...");
+console.log("Setting up test environment...")
 
 // This function runs before all tests
 export function beforeAll() {
-  console.log("Running global beforeAll hook");
+  console.log("Running global beforeAll hook")
 
   // You can add global setup logic here
   // For example, creating test directories, setting up mocks, etc.
@@ -20,7 +20,7 @@ export function beforeAll() {
 
 // This function runs after all tests
 export function afterAll() {
-  console.log("Running global afterAll hook");
+  console.log("Running global afterAll hook")
 
   // You can add global teardown logic here
   // For example, cleaning up test directories, resetting mocks, etc.
@@ -52,8 +52,8 @@ global.testUtils = {
         color: "default",
       },
       has_children: false,
-    };
+    }
   },
-};
+}
 
-console.log("Test environment setup complete");
+console.log("Test environment setup complete")

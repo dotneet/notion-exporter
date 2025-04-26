@@ -1,32 +1,32 @@
-import { expect, test, describe, mock, beforeEach, afterEach } from "bun:test";
-import { Client } from "@notionhq/client";
-import { BlockObjectResponse } from "@notionhq/client/build/src/api-endpoints";
-import { convertBlocksToMarkdown } from "../src/markdown";
-import * as fs from "fs";
-import * as path from "path";
-import { BlockWithChildren } from "../src/types";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import * as fs from "node:fs"
+import * as path from "node:path"
+import { Client } from "@notionhq/client"
+import type { BlockObjectResponse } from "@notionhq/client/build/src/api-endpoints"
+import { convertBlocksToMarkdown } from "../src/markdown"
+import { BlockWithChildren } from "../src/types"
 
 describe("Markdown Conversion", () => {
-  const TEST_DIR = path.join(process.cwd(), "test", "temp");
+  const TEST_DIR = path.join(process.cwd(), "test", "temp")
 
   beforeEach(() => {
     // Create test directory if it doesn't exist
     if (!fs.existsSync(TEST_DIR)) {
-      fs.mkdirSync(TEST_DIR, { recursive: true });
+      fs.mkdirSync(TEST_DIR, { recursive: true })
     }
 
     // Setup local mocks for each test
     mock.module("../src/utils", () => {
       return {
         downloadImage: mock(() => Promise.resolve()),
-      };
-    });
-  });
+      }
+    })
+  })
 
   afterEach(() => {
     // Restore mocks after each test
-    mock.restore();
-  });
+    mock.restore()
+  })
 
   describe("convertBlocksToMarkdown", () => {
     test("should convert paragraph blocks", async () => {
@@ -55,17 +55,17 @@ describe("Markdown Conversion", () => {
           },
           has_children: false,
         },
-      ];
+      ]
 
       // Call function
       const result = await convertBlocksToMarkdown(
         mockBlocks as BlockObjectResponse[],
         TEST_DIR,
-      );
+      )
 
       // Verify
-      expect(result).toContain("This is a paragraph");
-    });
+      expect(result).toContain("This is a paragraph")
+    })
 
     test("should convert heading blocks", async () => {
       // Mock heading blocks
@@ -142,19 +142,19 @@ describe("Markdown Conversion", () => {
           },
           has_children: false,
         },
-      ];
+      ]
 
       // Call function
       const result = await convertBlocksToMarkdown(
         mockBlocks as BlockObjectResponse[],
         TEST_DIR,
-      );
+      )
 
       // Verify
-      expect(result).toContain("# Heading 1");
-      expect(result).toContain("## Heading 2");
-      expect(result).toContain("### Heading 3");
-    });
+      expect(result).toContain("# Heading 1")
+      expect(result).toContain("## Heading 2")
+      expect(result).toContain("### Heading 3")
+    })
 
     test("should convert list items", async () => {
       // Mock list blocks
@@ -232,19 +232,19 @@ describe("Markdown Conversion", () => {
           },
           has_children: false,
         },
-      ];
+      ]
 
       // Call function
       const result = await convertBlocksToMarkdown(
         mockBlocks as BlockObjectResponse[],
         TEST_DIR,
-      );
+      )
 
       // Verify
-      expect(result).toContain("- Bullet item");
-      expect(result).toContain("1. Numbered item");
-      expect(result).toContain("- [x] Todo item");
-    });
+      expect(result).toContain("- Bullet item")
+      expect(result).toContain("1. Numbered item")
+      expect(result).toContain("- [x] Todo item")
+    })
 
     test("should convert code blocks", async () => {
       // Mock code block
@@ -274,19 +274,19 @@ describe("Markdown Conversion", () => {
           },
           has_children: false,
         },
-      ];
+      ]
 
       // Call function
       const result = await convertBlocksToMarkdown(
         mockBlocks as BlockObjectResponse[],
         TEST_DIR,
-      );
+      )
 
       // Verify
-      expect(result).toContain("```javascript");
-      expect(result).toContain("console.log('Hello World');");
-      expect(result).toContain("```");
-    });
+      expect(result).toContain("```javascript")
+      expect(result).toContain("console.log('Hello World');")
+      expect(result).toContain("```")
+    })
 
     test("should handle rich text formatting", async () => {
       // Mock paragraph with formatted text
@@ -371,16 +371,16 @@ describe("Markdown Conversion", () => {
           },
           has_children: false,
         },
-      ];
+      ]
 
       // Call function
       const result = await convertBlocksToMarkdown(
         mockBlocks as BlockObjectResponse[],
         TEST_DIR,
-      );
+      )
 
       // Verify
-      expect(result).toContain("**Bold** and *italic* and `code`");
-    });
-  });
-});
+      expect(result).toContain("**Bold** and *italic* and `code`")
+    })
+  })
+})
