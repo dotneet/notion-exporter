@@ -1,5 +1,5 @@
 {
-  "name": "@dotneet/notion-exporter",
+  "name": "@devneko/notion-exporter",
   "version": "0.1.0",
   "description": "Export Notion pages to Markdown files",
   "main": "dist/index.js",
