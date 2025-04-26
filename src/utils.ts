@@ -26,14 +26,15 @@ export function ensureDirectoryExists(dirPath: string): boolean {
  * @returns String suitable for filenames
  */
 export function getSafeFilename(title: string): string {
-  if (!title || title === "Untitled") {
+  // Check for empty string or "Untitled" first
+  if (!title || title.trim() === "" || title === "Untitled") {
     return "Untitled";
   }
 
   // Replace characters that cannot be used in filenames
   let safeTitle = title
     // Remove characters prohibited in file systems
-    .replace(/[\\/:*?"<>|]/g, "")
+    .replace(/[/\\:*?"<>|]/g, "")
     // Replace whitespace with underscores
     .replace(/\s+/g, "_")
     // Remove unnecessary characters from the beginning and end
@@ -41,8 +42,8 @@ export function getSafeFilename(title: string): string {
     // Combine consecutive underscores into one
     .replace(/_+/g, "_");
 
-  // Use default value if the string is empty
-  if (!safeTitle) {
+  // Use default value if the string is empty after replacements
+  if (!safeTitle || safeTitle.trim() === "") {
     return "Untitled";
   }
 
