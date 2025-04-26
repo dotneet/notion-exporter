@@ -1,5 +1,7 @@
 # Notion Exporter
 
+![CI](https://github.com/devneko/notion-exporter/actions/workflows/ci.yml/badge.svg)
+
 Export the content of a Notion page to a markdown file.
 
 ## Usage

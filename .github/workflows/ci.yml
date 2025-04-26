@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock', '**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build
+        run: bun run build
+
+      - name: Run tests
+        run: bun test
+        env:
+          NODE_ENV: test
+          NOTION_TOKEN: test-token
+          DEBUG: true
+
+      - name: Run reliable tests
+        run: bun run test:reliable
+        env:
+          NODE_ENV: test
+          NOTION_TOKEN: test-token
+          DEBUG: true
+
+      - name: Generate test coverage
+        run: bun run test:coverage
+        env:
+          NODE_ENV: test
+          NOTION_TOKEN: test-token
+          DEBUG: true
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
