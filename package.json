@@ -33,6 +33,7 @@
     "@biomejs/biome": "^1.9.4",
     "@types/node": "^20.0.0",
     "bun-types": "latest",
+    "lefthook": "^1.11.11",
     "typescript": "^5.0.0"
   }
 }
