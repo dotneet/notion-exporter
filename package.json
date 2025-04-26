@@ -2,14 +2,24 @@
   "name": "@dotneet/notion-exporter",
   "version": "0.1.0",
   "description": "Export Notion pages to Markdown files",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "notion-exporter": "src/index.ts"
+    "notion-exporter": "dist/index.js"
   },
   "scripts": {
     "start": "bun run src/index.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "build": "bun build ./src/index.ts --outdir ./dist --target node",
+    "prepublishOnly": "bun run build"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "notion",
@@ -18,7 +28,7 @@
     "github"
   ],
   "author": "",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "@notionhq/client": "^2.2.13"
   },
