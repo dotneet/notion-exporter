@@ -4,6 +4,8 @@
 
 import * as fs from "node:fs"
 import * as https from "node:https"
+import * as path from "node:path"
+import type { ImageDownloadResult, Logger } from "./types"
 
 /**
  * Ensure a directory exists, creating it if necessary
@@ -30,7 +32,7 @@ export function getSafeFilename(title: string): string {
   }
 
   // Replace characters that cannot be used in filenames
-  let safeTitle = title
+  const safeTitle = title
     // Remove characters prohibited in file systems
     .replace(/[/\\:*?"<>|]/g, "")
     // Replace whitespace with underscores
@@ -47,30 +49,37 @@ export function getSafeFilename(title: string): string {
 
   // Limit filename length (too long can cause problems in file systems)
   const MAX_FILENAME_LENGTH = 100
-  if (safeTitle.length > MAX_FILENAME_LENGTH) {
-    safeTitle = safeTitle.substring(0, MAX_FILENAME_LENGTH)
-  }
-
-  return safeTitle
+  return safeTitle.length > MAX_FILENAME_LENGTH
+    ? safeTitle.substring(0, MAX_FILENAME_LENGTH)
+    : safeTitle
 }
 
 /**
  * Download an image from a URL and save it to a file
  * @param url URL of the image to download
  * @param filePath Path where the image should be saved
- * @returns Promise that resolves when the download is complete
+ * @returns Promise that resolves with download result
  */
-export function downloadImage(url: string, filePath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
+export async function downloadImage(
+  url: string,
+  filePath: string,
+): Promise<ImageDownloadResult> {
+  return new Promise((resolve) => {
     https
       .get(url, (response) => {
         // Check if response is successful
         if (response.statusCode !== 200) {
-          reject(
-            new Error(
-              `Failed to download image: ${response.statusCode} ${response.statusMessage}`,
-            ),
+          const error = new Error(
+            `Failed to download image: ${response.statusCode} ${
+              response.statusMessage ?? "Unknown error"
+            }`,
           )
+          resolve({
+            success: false,
+            path: filePath,
+            originalUrl: url,
+            error,
+          })
           return
         }
 
@@ -83,16 +92,30 @@ export function downloadImage(url: string, filePath: string): Promise<void> {
         // Handle events
         fileStream.on("finish", () => {
           fileStream.close()
-          resolve()
+          resolve({
+            success: true,
+            path: filePath,
+            originalUrl: url,
+          })
         })
 
         fileStream.on("error", (err) => {
           fs.unlink(filePath, () => {}) // Delete file if error occurs
-          reject(err)
+          resolve({
+            success: false,
+            path: filePath,
+            originalUrl: url,
+            error: err,
+          })
         })
       })
       .on("error", (err) => {
-        reject(err)
+        resolve({
+          success: false,
+          path: filePath,
+          originalUrl: url,
+          error: err,
+        })
       })
   })
 }
@@ -108,7 +131,8 @@ export function getImageExtension(url: string): string {
   if (match?.[1]) {
     const ext = match[1].toLowerCase()
     // Check if it's a common image extension
-    if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) {
+    const validExtensions = ["jpg", "jpeg", "png", "gif", "webp", "svg"]
+    if (validExtensions.includes(ext)) {
       return `.${ext}`
     }
   }
@@ -122,17 +146,30 @@ export function getImageExtension(url: string): string {
  * @param prefix Prefix to add to log messages
  * @returns Object with logging methods
  */
-export function createLogger(prefix: string) {
-  const formatMessage = (message: string) => `[${prefix}] ${message}`
+export function createLogger(prefix: string): Logger {
+  const formatMessage = (message: string): string => `[${prefix}] ${message}`
 
   return {
-    log: (message: string) => console.log(formatMessage(message)),
-    error: (message: string) => console.error(formatMessage(message)),
-    warn: (message: string) => console.warn(formatMessage(message)),
-    debug: (message: string) => {
-      if (process.env.DEBUG) {
+    log: (message: string): void => console.log(formatMessage(message)),
+    error: (message: string): void => console.error(formatMessage(message)),
+    warn: (message: string): void => console.warn(formatMessage(message)),
+    debug: (message: string): void => {
+      if (process.env.DEBUG === "true") {
         console.debug(formatMessage(message))
       }
     },
   }
+}
+
+/**
+ * Safely join paths and ensure the result is within the base directory
+ * @param baseDir Base directory
+ * @param relativePath Relative path to join
+ * @returns Safe joined path
+ */
+export function safePathJoin(baseDir: string, relativePath: string): string {
+  const normalizedPath = path
+    .normalize(relativePath)
+    .replace(/^(\.\.(\/|\\|$))+/, "")
+  return path.join(baseDir, normalizedPath)
 }
