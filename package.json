@@ -16,7 +16,7 @@
     "build": "bun build ./src/index.ts --outdir ./dist --target node",
     "prepublishOnly": "bun run build",
     "lint": "biome check .",
-    "lint:fix": "biome check --apply .",
+    "lint:fix": "biome check --write .",
     "format": "biome format --write ."
   },
   "files": ["dist", "README.md", "LICENSE"],

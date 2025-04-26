@@ -7,7 +7,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { Client } from "@notionhq/client"
 import type { BlockObjectResponse } from "@notionhq/client/build/src/api-endpoints"
-import type { BlockWithChildren } from "./types"
+import type { BlockWithChildren, NotionRichText } from "./types"
 import {
   createLogger,
   downloadImage,
@@ -105,7 +105,7 @@ async function convertBlockToMarkdown(
   destinationDir = "",
   numberedListIndex = 0,
 ): Promise<string> {
-  const blockHandlers: Record<string, Function> = {
+  const blockHandlers: Record<string, () => string | Promise<string>> = {
     paragraph: () => convertParagraph(block),
     heading_1: () => convertHeading1(block),
     heading_2: () => convertHeading2(block),
@@ -410,7 +410,7 @@ async function convertTable(block: BlockWithChildren): Promise<string> {
  * @param richText Array of rich text
  * @returns Plain text (Markdown format)
  */
-function convertRichText(richText: any[]): string {
+function convertRichText(richText: NotionRichText[]): string {
   if (!richText || richText.length === 0) {
     return ""
   }
