@@ -332,8 +332,9 @@ async function convertImage(
       console.log(`  - Created images directory: ${imagesDir}`);
     }
 
-    // Generate a unique filename based on URL
-    const urlHash = crypto.createHash("md5").update(url).digest("hex");
+    // Generate a unique filename based on URL (without query parameters)
+    const baseUrl = url.split("?")[0]; // Remove query parameters
+    const urlHash = crypto.createHash("md5").update(baseUrl).digest("hex");
     const fileExtension = getImageExtension(url);
     const filename = `image_${urlHash}${fileExtension}`;
     const filePath = path.join(imagesDir, filename);
