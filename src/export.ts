@@ -57,7 +57,11 @@ export async function exportNotionPage(
 
     // Convert blocks to Markdown
     console.log("Converting blocks to Markdown...");
-    const markdown = await convertBlocksToMarkdown(notion, blocks);
+    const markdown = await convertBlocksToMarkdown(
+      notion,
+      blocks,
+      destinationDir,
+    );
     console.log("Conversion to Markdown completed.");
 
     // Create destination directory if it doesn't exist

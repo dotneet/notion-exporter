@@ -7,6 +7,8 @@ import { Client } from "@notionhq/client";
 import { BlockObjectResponse } from "@notionhq/client/build/src/api-endpoints";
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
+import * as https from "https";
 
 /**
  * Convert Notion blocks to Markdown
@@ -17,17 +19,53 @@ import * as path from "path";
 export async function convertBlocksToMarkdown(
   notion: Client,
   blocks: BlockObjectResponse[],
+  destinationDir: string = "",
 ): Promise<string> {
   console.log(
     `  - Starting conversion of ${blocks.length} blocks to Markdown...`,
   );
   let markdown = "";
   let convertedBlocks = 0;
+  let prevBlockType = "";
+  let numberedListCounter = 0;
 
-  for (const block of blocks) {
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    const nextBlock = i < blocks.length - 1 ? blocks[i + 1] : null;
     console.log(`  - Converting block type: ${block.type}`);
-    markdown += await convertBlockToMarkdown(notion, block);
-    markdown += "\n\n";
+
+    // Reset numbered list counter when not in a numbered list
+    if (block.type !== "numbered_list_item") {
+      numberedListCounter = 0;
+    } else {
+      // Increment counter for numbered list items
+      if (prevBlockType !== "numbered_list_item") {
+        // Start a new numbered list
+        numberedListCounter = 1;
+      } else {
+        // Continue the existing numbered list
+        numberedListCounter++;
+      }
+    }
+
+    // Convert current block
+    const blockMarkdown = await convertBlockToMarkdown(
+      notion,
+      block,
+      destinationDir,
+      numberedListCounter,
+    );
+
+    // Determine appropriate separator based on block types
+    let separator = "\n\n";
+
+    // Special handling for list items and TODOs to avoid extra newlines
+    if (isListItem(block.type) && nextBlock && isListItem(nextBlock.type)) {
+      separator = "\n";
+    }
+
+    markdown += blockMarkdown + separator;
+    prevBlockType = block.type;
     convertedBlocks++;
 
     if (convertedBlocks % 10 === 0) {
@@ -44,6 +82,15 @@ export async function convertBlocksToMarkdown(
 }
 
 /**
+ * Check if block type is a list item type
+ */
+function isListItem(blockType: string): boolean {
+  return ["bulleted_list_item", "numbered_list_item", "to_do"].includes(
+    blockType,
+  );
+}
+
+/**
  * Convert a single Notion block to Markdown
  * @param notion Notion API client
  * @param block Block to convert
@@ -52,6 +99,8 @@ export async function convertBlocksToMarkdown(
 async function convertBlockToMarkdown(
   notion: Client,
   block: BlockObjectResponse,
+  destinationDir: string = "",
+  numberedListIndex: number = 0,
 ): Promise<string> {
   switch (block.type) {
     case "paragraph":
@@ -70,13 +119,13 @@ async function convertBlockToMarkdown(
       return convertBulletedListItem(block);
 
     case "numbered_list_item":
-      return convertNumberedListItem(block);
+      return convertNumberedListItem(block, numberedListIndex);
 
     case "to_do":
       return convertToDo(block);
 
     case "toggle":
-      return await convertToggle(notion, block);
+      return await convertToggle(notion, block, destinationDir);
 
     case "code":
       return convertCode(block);
@@ -91,16 +140,21 @@ async function convertBlockToMarkdown(
       return convertCallout(block);
 
     case "image":
-      return convertImage(block);
+      return await convertImage(block, destinationDir);
 
     case "table":
-      return await convertTable(notion, block);
+      return await convertTable(notion, block, destinationDir);
 
     case "child_page":
-      return `[${block.child_page.title}](${block.id}.md)`;
+      return `[${
+        block.child_page.title
+      }](https://www.notion.so/${block.id.replace(/-/g, "")})`;
 
     case "child_database":
-      return `[Database: ${block.id}](${block.id}.md)`;
+      return `[Database: ${block.id}](https://www.notion.so/${block.id.replace(
+        /-/g,
+        "",
+      )})`;
 
     default:
       return `<!-- Unsupported block type: ${block.type} -->`;
@@ -155,10 +209,13 @@ function convertBulletedListItem(block: BlockObjectResponse): string {
 /**
  * Convert numbered list item
  */
-function convertNumberedListItem(block: BlockObjectResponse): string {
+function convertNumberedListItem(
+  block: BlockObjectResponse,
+  index: number = 1,
+): string {
   if (block.type !== "numbered_list_item") return "";
 
-  return `1. ${convertRichText(block.numbered_list_item.rich_text)}`;
+  return `${index}. ${convertRichText(block.numbered_list_item.rich_text)}`;
 }
 
 /**
@@ -168,7 +225,7 @@ function convertToDo(block: BlockObjectResponse): string {
   if (block.type !== "to_do") return "";
 
   const checkbox = block.to_do.checked ? "[x]" : "[ ]";
-  return `${checkbox} ${convertRichText(block.to_do.rich_text)}`;
+  return `- ${checkbox} ${convertRichText(block.to_do.rich_text)}`;
 }
 
 /**
@@ -177,6 +234,7 @@ function convertToDo(block: BlockObjectResponse): string {
 async function convertToggle(
   notion: Client,
   block: BlockObjectResponse,
+  destinationDir: string = "",
 ): Promise<string> {
   if (block.type !== "toggle") return "";
 
@@ -186,9 +244,9 @@ async function convertToggle(
   let content = "";
   if (block.has_children) {
     // @ts-ignore - children property is dynamically added
-    if (block.children) {
-      // @ts-ignore
-      content = await convertBlocksToMarkdown(notion, block.children);
+    const children = (block as any).children;
+    if (children) {
+      content = await convertBlocksToMarkdown(notion, children, destinationDir);
     }
   }
 
@@ -242,7 +300,10 @@ function convertCallout(block: BlockObjectResponse): string {
 /**
  * Convert image block
  */
-function convertImage(block: BlockObjectResponse): string {
+async function convertImage(
+  block: BlockObjectResponse,
+  destinationDir: string = "",
+): Promise<string> {
   if (block.type !== "image") return "";
 
   let url = "";
@@ -258,7 +319,104 @@ function convertImage(block: BlockObjectResponse): string {
     caption = convertRichText(block.image.caption);
   }
 
-  return `![${caption}](${url})`;
+  // If no destination directory is provided, return the original URL
+  if (!destinationDir) {
+    return `![${caption}](${url})`;
+  }
+
+  try {
+    // Create images directory if it doesn't exist
+    const imagesDir = path.join(destinationDir, "images");
+    if (!fs.existsSync(imagesDir)) {
+      fs.mkdirSync(imagesDir, { recursive: true });
+      console.log(`  - Created images directory: ${imagesDir}`);
+    }
+
+    // Generate a unique filename based on URL
+    const urlHash = crypto.createHash("md5").update(url).digest("hex");
+    const fileExtension = getImageExtension(url);
+    const filename = `image_${urlHash}${fileExtension}`;
+    const filePath = path.join(imagesDir, filename);
+    const relativeFilePath = path.join("images", filename);
+
+    // Download the image if it doesn't exist
+    if (!fs.existsSync(filePath)) {
+      console.log(`  - Downloading image from ${url}`);
+      await downloadImage(url, filePath);
+      console.log(`  - Image saved to ${filePath}`);
+    } else {
+      console.log(`  - Image already exists at ${filePath}`);
+    }
+
+    // Return markdown with local image reference
+    return `![${caption}](${relativeFilePath.replace(/\\/g, "/")})`;
+  } catch (error) {
+    console.error(
+      `  - Error downloading image: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    // Fallback to original URL if download fails
+    return `![${caption}](${url})`;
+  }
+}
+
+/**
+ * Download an image from a URL and save it to a file
+ */
+function downloadImage(url: string, filePath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    https
+      .get(url, (response) => {
+        // Check if response is successful
+        if (response.statusCode !== 200) {
+          reject(
+            new Error(
+              `Failed to download image: ${response.statusCode} ${response.statusMessage}`,
+            ),
+          );
+          return;
+        }
+
+        // Create write stream
+        const fileStream = fs.createWriteStream(filePath);
+
+        // Pipe response to file
+        response.pipe(fileStream);
+
+        // Handle events
+        fileStream.on("finish", () => {
+          fileStream.close();
+          resolve();
+        });
+
+        fileStream.on("error", (err) => {
+          fs.unlink(filePath, () => {}); // Delete file if error occurs
+          reject(err);
+        });
+      })
+      .on("error", (err) => {
+        reject(err);
+      });
+  });
+}
+
+/**
+ * Get image file extension from URL
+ */
+function getImageExtension(url: string): string {
+  // Try to extract extension from URL
+  const match = url.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
+  if (match && match[1]) {
+    const ext = match[1].toLowerCase();
+    // Check if it's a common image extension
+    if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) {
+      return `.${ext}`;
+    }
+  }
+
+  // Default to .jpg if extension can't be determined
+  return ".jpg";
 }
 
 /**
@@ -267,10 +425,11 @@ function convertImage(block: BlockObjectResponse): string {
 async function convertTable(
   notion: Client,
   block: BlockObjectResponse,
+  destinationDir: string = "",
 ): Promise<string> {
   if (block.type !== "table") return "";
 
-  // テーブルの行数と列数
+  // Get table row and column counts
   const rowCount = block.table.has_row_header
     ? block.table.has_row_header
     : false;
@@ -280,10 +439,10 @@ async function convertTable(
 
   // Get table child blocks (rows)
   let rows: BlockObjectResponse[] = [];
-  // @ts-ignore - children property is dynamically added
-  if (block.children) {
-    // @ts-ignore
-    rows = block.children;
+  // children property is dynamically added
+  const children = (block as any).children;
+  if (children) {
+    rows = children;
   }
 
   if (rows.length === 0) {
