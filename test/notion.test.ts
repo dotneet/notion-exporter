@@ -10,6 +10,7 @@ import {
   getPageTitle,
   getSubpages,
 } from "../src/notion"
+import type { NotionAPIError } from "../src/types"
 
 // Create a mock Notion client
 const createMockClient = () => {
@@ -58,8 +59,8 @@ describe("Notion API Integration", () => {
 
     test("should handle API errors", async () => {
       // Setup mock to throw error
-      const error = new Error("API Error")
-      ;(error as any).code = "unauthorized"
+      const error = new Error("API Error") as NotionAPIError
+      error.code = "unauthorized"
       notionClient.pages.retrieve = () => Promise.reject(error)
 
       // Call function and expect it to throw

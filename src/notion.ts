@@ -8,7 +8,7 @@ import type {
   ListBlockChildrenResponse,
   PageObjectResponse,
 } from "@notionhq/client/build/src/api-endpoints"
-import type { BlockWithChildren, SubpageInfo } from "./types"
+import type { BlockWithChildren, NotionAPIError, SubpageInfo } from "./types"
 import { createLogger } from "./utils"
 
 // Create logger for this module
@@ -35,7 +35,7 @@ export async function getNotionPage(
     if (error instanceof Error) {
       // Check Notion API error code
       if ("code" in error) {
-        const apiError = error as any
+        const apiError = error as NotionAPIError
 
         // Detailed messages for common error codes
         if (apiError.code === "unauthorized") {
@@ -142,7 +142,7 @@ export async function getNotionBlocks(
 
       // Check Notion API error code
       if ("code" in error) {
-        logger.error(`Error Code: ${(error as any).code}`)
+        logger.error(`Error Code: ${(error as NotionAPIError).code}`)
       }
     } else {
       logger.error(`Unknown Error: ${String(error)}`)

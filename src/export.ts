@@ -13,7 +13,7 @@ import {
   getPageTitle,
   getSubpages,
 } from "./notion"
-import type { ExportResult } from "./types"
+import type { ExportResult, NotionAPIError } from "./types"
 import { createLogger, ensureDirectoryExists, getSafeFilename } from "./utils"
 
 // Create logger for this module
@@ -127,10 +127,10 @@ export async function exportNotionPage(
 
       // Display detailed information for Notion API errors
       if ("code" in error) {
-        logger.error(`API Error code: ${(error as any).code}`)
+        logger.error(`API Error code: ${(error as NotionAPIError).code}`)
       }
       if ("status" in error) {
-        logger.error(`API Status: ${(error as any).status}`)
+        logger.error(`API Status: ${(error as NotionAPIError).status}`)
       }
     } else {
       logger.error(`Unknown error: ${String(error)}`)
