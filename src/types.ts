@@ -36,8 +36,8 @@ export type BlockWithChildren = BlockObjectResponse & {
  * Notion API Error type
  */
 export interface NotionAPIError extends Error {
-  code?: string
-  status?: number
+  code: string | undefined
+  status: number | undefined
 }
 
 /**
@@ -59,4 +59,24 @@ export interface NotionRichText {
     content: string
     link?: { url: string } | null
   }
+}
+
+/**
+ * Logger interface
+ */
+export interface Logger {
+  log: (message: string) => void
+  error: (message: string) => void
+  warn: (message: string) => void
+  debug: (message: string) => void
+}
+
+/**
+ * Image download result
+ */
+export interface ImageDownloadResult {
+  success: boolean
+  path: string
+  originalUrl: string
+  error?: Error
 }

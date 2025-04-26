@@ -12,7 +12,13 @@
     "sourceMap": true,
     "resolveJsonModule": true,
     "lib": ["ESNext", "DOM"],
-    "types": ["bun-types", "node"]
+    "types": ["bun-types", "node"],
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

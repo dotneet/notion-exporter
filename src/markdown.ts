@@ -327,8 +327,12 @@ async function convertImage(
   try {
     // Create images directory if it doesn't exist
     const imagesDir = path.join(destinationDir, "images")
-    ensureDirectoryExists(imagesDir)
-    logger.log(`Ensuring images directory exists: ${imagesDir}`)
+    const dirCreated = ensureDirectoryExists(imagesDir)
+    if (dirCreated) {
+      logger.log(`Created images directory: ${imagesDir}`)
+    } else {
+      logger.log(`Images directory exists: ${imagesDir}`)
+    }
 
     // Generate a unique filename based on URL (without query parameters)
     const baseUrl = url.split("?")[0] // Remove query parameters
@@ -341,7 +345,17 @@ async function convertImage(
     // Download the image if it doesn't exist
     if (!fs.existsSync(filePath)) {
       logger.log(`Downloading image from ${url}`)
-      await downloadImage(url, filePath)
+      const downloadResult = await downloadImage(url, filePath)
+
+      if (!downloadResult.success) {
+        logger.error(
+          `Failed to download image: ${
+            downloadResult.error?.message ?? "Unknown error"
+          }`,
+        )
+        return `![${caption}](${url})`
+      }
+
       logger.log(`Image saved to ${filePath}`)
     } else {
       logger.log(`Image already exists at ${filePath}`)
@@ -351,11 +365,11 @@ async function convertImage(
     return `![${caption}](${relativeFilePath.replace(/\\/g, "/")})`
   } catch (error) {
     logger.error(
-      `Error downloading image: ${
+      `Error processing image: ${
         error instanceof Error ? error.message : String(error)
       }`,
     )
-    // Fallback to original URL if download fails
+    // Fallback to original URL if processing fails
     return `![${caption}](${url})`
   }
 }
