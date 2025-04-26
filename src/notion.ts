@@ -2,17 +2,17 @@
  * Notion Exporter - Notion API Integration
  */
 
-import { Client } from "@notionhq/client";
-import {
+import type { Client } from "@notionhq/client"
+import type {
   BlockObjectResponse,
   ListBlockChildrenResponse,
   PageObjectResponse,
-} from "@notionhq/client/build/src/api-endpoints";
-import { BlockWithChildren, SubpageInfo } from "./types";
-import { createLogger } from "./utils";
+} from "@notionhq/client/build/src/api-endpoints"
+import type { BlockWithChildren, SubpageInfo } from "./types"
+import { createLogger } from "./utils"
 
 // Create logger for this module
-const logger = createLogger("Notion");
+const logger = createLogger("Notion")
 
 /**
  * Get Notion page information
@@ -25,41 +25,41 @@ export async function getNotionPage(
   pageId: string,
 ): Promise<PageObjectResponse> {
   try {
-    logger.log(`Retrieving page with ID ${pageId}...`);
-    const response = await notion.pages.retrieve({ page_id: pageId });
-    logger.log(`Successfully retrieved page data`);
-    return response as PageObjectResponse;
+    logger.log(`Retrieving page with ID ${pageId}...`)
+    const response = await notion.pages.retrieve({ page_id: pageId })
+    logger.log("Successfully retrieved page data")
+    return response as PageObjectResponse
   } catch (error) {
-    logger.error(`Failed to retrieve page ${pageId}`);
+    logger.error(`Failed to retrieve page ${pageId}`)
 
     if (error instanceof Error) {
       // Check Notion API error code
       if ("code" in error) {
-        const apiError = error as any;
+        const apiError = error as any
 
         // Detailed messages for common error codes
         if (apiError.code === "unauthorized") {
           logger.error(
             `Your API token doesn't have access to this page. Make sure to share the page with your integration.`,
-          );
+          )
         } else if (apiError.code === "object_not_found") {
           logger.error(
             `Page with ID ${pageId} not found. Check if the ID is correct.`,
-          );
+          )
         } else if (apiError.status === 429) {
-          logger.error(`Rate limit exceeded. Try again later.`);
+          logger.error("Rate limit exceeded. Try again later.")
         } else {
-          logger.error(`Error Code: ${apiError.code}`);
-          logger.error(`Error Message: ${error.message}`);
+          logger.error(`Error Code: ${apiError.code}`)
+          logger.error(`Error Message: ${error.message}`)
         }
       } else {
-        logger.error(`Error Message: ${error.message}`);
+        logger.error(`Error Message: ${error.message}`)
       }
     } else {
-      logger.error(`Unknown Error: ${String(error)}`);
+      logger.error(`Unknown Error: ${String(error)}`)
     }
 
-    throw error;
+    throw error
   }
 }
 
@@ -73,82 +73,82 @@ export async function getNotionBlocks(
   notion: Client,
   blockId: string,
 ): Promise<BlockWithChildren[]> {
-  const blocks: BlockWithChildren[] = [];
-  let cursor: string | undefined;
-  let pageCount = 0;
+  const blocks: BlockWithChildren[] = []
+  let cursor: string | undefined
+  let pageCount = 0
 
   try {
-    logger.log(`Retrieving blocks for ${blockId}...`);
+    logger.log(`Retrieving blocks for ${blockId}...`)
 
     // Get all blocks using pagination
     do {
-      pageCount++;
-      logger.log(`Fetching page ${pageCount} of blocks...`);
+      pageCount++
+      logger.log(`Fetching page ${pageCount} of blocks...`)
 
       const response = (await notion.blocks.children.list({
         block_id: blockId,
         start_cursor: cursor,
-      })) as ListBlockChildrenResponse;
+      })) as ListBlockChildrenResponse
 
       // Add retrieved blocks
-      const newBlocks = response.results as BlockWithChildren[];
-      blocks.push(...newBlocks);
+      const newBlocks = response.results as BlockWithChildren[]
+      blocks.push(...newBlocks)
       logger.log(
         `Retrieved ${newBlocks.length} blocks (total: ${blocks.length})`,
-      );
+      )
 
       // Check if there's a next page
-      cursor = response.next_cursor || undefined;
+      cursor = response.next_cursor || undefined
 
       if (cursor) {
-        logger.log(`More blocks available, continuing to next page...`);
+        logger.log("More blocks available, continuing to next page...")
       }
-    } while (cursor);
+    } while (cursor)
 
-    logger.log(`Processing nested blocks...`);
+    logger.log("Processing nested blocks...")
 
     // For blocks with children, recursively get child blocks
-    let nestedBlockCount = 0;
+    let nestedBlockCount = 0
     for (let i = 0; i < blocks.length; i++) {
-      const block = blocks[i];
+      const block = blocks[i]
 
       // For block types that have children
       if (block.has_children) {
-        nestedBlockCount++;
+        nestedBlockCount++
         logger.log(
           `Processing nested block ${nestedBlockCount}: ${block.type} (${block.id})`,
-        );
+        )
 
-        const childBlocks = await getNotionBlocks(notion, block.id);
+        const childBlocks = await getNotionBlocks(notion, block.id)
 
         // Add child block information to parent block
-        block.children = childBlocks;
+        block.children = childBlocks
 
         logger.log(
           `Added ${childBlocks.length} child blocks to ${block.type} block`,
-        );
+        )
       }
     }
 
     logger.log(
       `Successfully retrieved all blocks: ${blocks.length} top-level blocks with ${nestedBlockCount} nested parent blocks`,
-    );
-    return blocks;
+    )
+    return blocks
   } catch (error) {
-    logger.error(`Failed to retrieve blocks for ${blockId}`);
+    logger.error(`Failed to retrieve blocks for ${blockId}`)
 
     if (error instanceof Error) {
-      logger.error(`Error Message: ${error.message}`);
+      logger.error(`Error Message: ${error.message}`)
 
       // Check Notion API error code
       if ("code" in error) {
-        logger.error(`Error Code: ${(error as any).code}`);
+        logger.error(`Error Code: ${(error as any).code}`)
       }
     } else {
-      logger.error(`Unknown Error: ${String(error)}`);
+      logger.error(`Unknown Error: ${String(error)}`)
     }
 
-    throw error;
+    throw error
   }
 }
 
@@ -162,22 +162,22 @@ export async function getSubpages(
   notion: Client,
   blocks: BlockObjectResponse[],
 ): Promise<SubpageInfo[]> {
-  logger.log(`Scanning for subpages in ${blocks.length} blocks...`);
-  const subpages: SubpageInfo[] = [];
+  logger.log(`Scanning for subpages in ${blocks.length} blocks...`)
+  const subpages: SubpageInfo[] = []
 
   // Scan blocks to find child_page type
   for (const block of blocks) {
     if (block.type === "child_page") {
-      logger.log(`Found subpage: "${block.child_page.title}" (${block.id})`);
+      logger.log(`Found subpage: "${block.child_page.title}" (${block.id})`)
       subpages.push({
         id: block.id,
         title: block.child_page.title,
-      });
+      })
     }
   }
 
-  logger.log(`Total subpages found: ${subpages.length}`);
-  return subpages;
+  logger.log(`Total subpages found: ${subpages.length}`)
+  return subpages
 }
 
 /**
@@ -189,13 +189,13 @@ export function getPageTitle(page: PageObjectResponse): string {
   // Find title property
   const titleProperty = Object.values(page.properties).find(
     (property) => property.type === "title",
-  );
+  )
 
   if (titleProperty?.type === "title") {
     return (
       titleProperty.title.map((text) => text.plain_text).join("") || "Untitled"
-    );
+    )
   }
 
-  return "Untitled";
+  return "Untitled"
 }
