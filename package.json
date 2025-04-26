@@ -1,12 +1,14 @@
 {
-  "name": "notion-exporter",
+  "name": "@dotneet/notion-exporter",
   "version": "0.1.0",
   "description": "Export Notion pages to Markdown files",
   "main": "src/index.ts",
   "type": "module",
+  "bin": {
+    "notion-exporter": "src/index.ts"
+  },
   "scripts": {
     "start": "bun run src/index.ts",
-    "build": "bun build src/index.ts --outdir dist",
     "test": "bun test"
   },
   "keywords": [

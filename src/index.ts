@@ -22,7 +22,7 @@ if (args.includes("--recursive")) {
 // Process required arguments
 if (args.length < 2) {
   console.error(
-    "Usage: bun run src/export.ts [--recursive] <notion-page-id> <destination-dir>",
+    "Usage: bunx notion-exporter [--recursive] <notion-page-id> <destination-dir>",
   );
   process.exit(1);
 }
@@ -88,7 +88,7 @@ try {
   console.error("4. Check network connectivity");
   console.error("\nFor more detailed logs, run with DEBUG=true:");
   console.error(
-    "DEBUG=true bun run src/export.ts [--recursive] <notion-page-id> <destination-dir>",
+    "DEBUG=true bunx notion-exporter [--recursive] <notion-page-id> <destination-dir>",
   );
 
   process.exit(1);
