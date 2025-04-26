@@ -19,15 +19,6 @@ describe("Markdown Conversion", () => {
     mock.module("../src/utils", () => {
       return {
         downloadImage: mock(() => Promise.resolve()),
-        ensureDirectoryExists: mock(() => true),
-        getImageExtension: mock(() => ".jpg"),
-        getSafeFilename: mock((name) => name),
-        createLogger: () => ({
-          log: mock(),
-          error: mock(),
-          warn: mock(),
-          debug: mock(),
-        }),
       };
     });
   });
