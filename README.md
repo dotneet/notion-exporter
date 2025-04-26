@@ -43,3 +43,29 @@ bun run build
 # Run with Node.js
 node dist/index.js [--recursive] notion-page-id destination-dir
 ```
+
+## Testing
+
+The project includes a comprehensive test suite using Bun's built-in test runner. To run the tests:
+
+```bash
+# Run all tests
+bun test
+
+# Run tests in watch mode (automatically re-run on file changes)
+bun test --watch
+
+# Run tests with coverage report
+bun test --coverage
+
+# Run only the reliable tests (no mocking issues)
+bun run test:reliable
+```
+
+The test suite includes:
+
+- Unit tests for utility functions
+- Mocked tests for Notion API integration
+- Tests for markdown conversion
+- Tests for export functionality
+- Tests for CLI interface

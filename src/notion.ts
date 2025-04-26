@@ -1,6 +1,5 @@
 /**
- * Notion to Markdown Exporter
- * Notion API Integration
+ * Notion Exporter - Notion API Integration
  */
 
 import { Client } from "@notionhq/client";
@@ -9,6 +8,11 @@ import {
   ListBlockChildrenResponse,
   PageObjectResponse,
 } from "@notionhq/client/build/src/api-endpoints";
+import { BlockWithChildren, SubpageInfo } from "./types";
+import { createLogger } from "./utils";
+
+// Create logger for this module
+const logger = createLogger("Notion");
 
 /**
  * Get Notion page information
@@ -21,12 +25,12 @@ export async function getNotionPage(
   pageId: string,
 ): Promise<PageObjectResponse> {
   try {
-    console.log(`  - API Call: Retrieving page with ID ${pageId}...`);
+    logger.log(`Retrieving page with ID ${pageId}...`);
     const response = await notion.pages.retrieve({ page_id: pageId });
-    console.log(`  - API Response: Successfully retrieved page data`);
+    logger.log(`Successfully retrieved page data`);
     return response as PageObjectResponse;
   } catch (error) {
-    console.error(`  - API Error: Failed to retrieve page ${pageId}`);
+    logger.error(`Failed to retrieve page ${pageId}`);
 
     if (error instanceof Error) {
       // Check Notion API error code
@@ -35,26 +39,24 @@ export async function getNotionPage(
 
         // Detailed messages for common error codes
         if (apiError.code === "unauthorized") {
-          console.error(
-            `  - Error Details: Your API token doesn't have access to this page. Make sure to share the page with your integration.`,
+          logger.error(
+            `Your API token doesn't have access to this page. Make sure to share the page with your integration.`,
           );
         } else if (apiError.code === "object_not_found") {
-          console.error(
-            `  - Error Details: Page with ID ${pageId} not found. Check if the ID is correct.`,
+          logger.error(
+            `Page with ID ${pageId} not found. Check if the ID is correct.`,
           );
         } else if (apiError.status === 429) {
-          console.error(
-            `  - Error Details: Rate limit exceeded. Try again later.`,
-          );
+          logger.error(`Rate limit exceeded. Try again later.`);
         } else {
-          console.error(`  - Error Code: ${apiError.code}`);
-          console.error(`  - Error Message: ${error.message}`);
+          logger.error(`Error Code: ${apiError.code}`);
+          logger.error(`Error Message: ${error.message}`);
         }
       } else {
-        console.error(`  - Error Message: ${error.message}`);
+        logger.error(`Error Message: ${error.message}`);
       }
     } else {
-      console.error(`  - Unknown Error:`, error);
+      logger.error(`Unknown Error: ${String(error)}`);
     }
 
     throw error;
@@ -65,23 +67,23 @@ export async function getNotionPage(
  * Get blocks (content) of a Notion page
  * @param notion Notion API client
  * @param blockId Block ID (usually page ID)
- * @returns Array of blocks
+ * @returns Array of blocks with children
  */
 export async function getNotionBlocks(
   notion: Client,
   blockId: string,
-): Promise<BlockObjectResponse[]> {
-  const blocks: BlockObjectResponse[] = [];
+): Promise<BlockWithChildren[]> {
+  const blocks: BlockWithChildren[] = [];
   let cursor: string | undefined;
   let pageCount = 0;
 
   try {
-    console.log(`  - API Call: Retrieving blocks for ${blockId}...`);
+    logger.log(`Retrieving blocks for ${blockId}...`);
 
     // Get all blocks using pagination
     do {
       pageCount++;
-      console.log(`  - Fetching page ${pageCount} of blocks...`);
+      logger.log(`Fetching page ${pageCount} of blocks...`);
 
       const response = (await notion.blocks.children.list({
         block_id: blockId,
@@ -89,21 +91,21 @@ export async function getNotionBlocks(
       })) as ListBlockChildrenResponse;
 
       // Add retrieved blocks
-      const newBlocks = response.results as BlockObjectResponse[];
+      const newBlocks = response.results as BlockWithChildren[];
       blocks.push(...newBlocks);
-      console.log(
-        `  - Retrieved ${newBlocks.length} blocks (total: ${blocks.length})`,
+      logger.log(
+        `Retrieved ${newBlocks.length} blocks (total: ${blocks.length})`,
       );
 
       // Check if there's a next page
       cursor = response.next_cursor || undefined;
 
       if (cursor) {
-        console.log(`  - More blocks available, continuing to next page...`);
+        logger.log(`More blocks available, continuing to next page...`);
       }
     } while (cursor);
 
-    console.log(`  - Processing nested blocks...`);
+    logger.log(`Processing nested blocks...`);
 
     // For blocks with children, recursively get child blocks
     let nestedBlockCount = 0;
@@ -113,38 +115,37 @@ export async function getNotionBlocks(
       // For block types that have children
       if (block.has_children) {
         nestedBlockCount++;
-        console.log(
-          `  - Processing nested block ${nestedBlockCount}: ${block.type} (${block.id})`,
+        logger.log(
+          `Processing nested block ${nestedBlockCount}: ${block.type} (${block.id})`,
         );
 
         const childBlocks = await getNotionBlocks(notion, block.id);
 
         // Add child block information to parent block
-        // @ts-ignore - children property is dynamically added
         block.children = childBlocks;
 
-        console.log(
-          `  - Added ${childBlocks.length} child blocks to ${block.type} block`,
+        logger.log(
+          `Added ${childBlocks.length} child blocks to ${block.type} block`,
         );
       }
     }
 
-    console.log(
-      `  - Successfully retrieved all blocks: ${blocks.length} top-level blocks with ${nestedBlockCount} nested parent blocks`,
+    logger.log(
+      `Successfully retrieved all blocks: ${blocks.length} top-level blocks with ${nestedBlockCount} nested parent blocks`,
     );
     return blocks;
   } catch (error) {
-    console.error(`  - API Error: Failed to retrieve blocks for ${blockId}`);
+    logger.error(`Failed to retrieve blocks for ${blockId}`);
 
     if (error instanceof Error) {
-      console.error(`  - Error Message: ${error.message}`);
+      logger.error(`Error Message: ${error.message}`);
 
       // Check Notion API error code
       if ("code" in error) {
-        console.error(`  - Error Code: ${(error as any).code}`);
+        logger.error(`Error Code: ${(error as any).code}`);
       }
     } else {
-      console.error(`  - Unknown Error:`, error);
+      logger.error(`Unknown Error: ${String(error)}`);
     }
 
     throw error;
@@ -160,16 +161,14 @@ export async function getNotionBlocks(
 export async function getSubpages(
   notion: Client,
   blocks: BlockObjectResponse[],
-): Promise<{ id: string; title: string }[]> {
-  console.log(`  - Scanning for subpages in ${blocks.length} blocks...`);
-  const subpages: { id: string; title: string }[] = [];
+): Promise<SubpageInfo[]> {
+  logger.log(`Scanning for subpages in ${blocks.length} blocks...`);
+  const subpages: SubpageInfo[] = [];
 
   // Scan blocks to find child_page type
   for (const block of blocks) {
     if (block.type === "child_page") {
-      console.log(
-        `  - Found subpage: "${block.child_page.title}" (${block.id})`,
-      );
+      logger.log(`Found subpage: "${block.child_page.title}" (${block.id})`);
       subpages.push({
         id: block.id,
         title: block.child_page.title,
@@ -177,6 +176,26 @@ export async function getSubpages(
     }
   }
 
-  console.log(`  - Total subpages found: ${subpages.length}`);
+  logger.log(`Total subpages found: ${subpages.length}`);
   return subpages;
+}
+
+/**
+ * Get page title from page properties
+ * @param page Notion page object
+ * @returns Page title
+ */
+export function getPageTitle(page: PageObjectResponse): string {
+  // Find title property
+  const titleProperty = Object.values(page.properties).find(
+    (property) => property.type === "title",
+  );
+
+  if (titleProperty?.type === "title") {
+    return (
+      titleProperty.title.map((text) => text.plain_text).join("") || "Untitled"
+    );
+  }
+
+  return "Untitled";
 }

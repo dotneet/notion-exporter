@@ -1,6 +1,5 @@
 /**
- * Notion to Markdown Exporter
- * Markdown conversion functionality
+ * Notion Exporter - Markdown Conversion Functionality
  */
 
 import { Client } from "@notionhq/client";
@@ -8,22 +7,29 @@ import { BlockObjectResponse } from "@notionhq/client/build/src/api-endpoints";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
-import * as https from "https";
+import { BlockWithChildren } from "./types";
+import {
+  createLogger,
+  downloadImage,
+  ensureDirectoryExists,
+  getImageExtension,
+} from "./utils";
+
+// Create logger for this module
+const logger = createLogger("Markdown");
 
 /**
  * Convert Notion blocks to Markdown
  * @param notion Notion API client
  * @param blocks Array of blocks
+ * @param destinationDir Destination directory for assets
  * @returns Text in Markdown format
  */
 export async function convertBlocksToMarkdown(
-  notion: Client,
   blocks: BlockObjectResponse[],
   destinationDir: string = "",
 ): Promise<string> {
-  console.log(
-    `  - Starting conversion of ${blocks.length} blocks to Markdown...`,
-  );
+  logger.log(`Starting conversion of ${blocks.length} blocks to Markdown...`);
   let markdown = "";
   let convertedBlocks = 0;
   let prevBlockType = "";
@@ -32,7 +38,7 @@ export async function convertBlocksToMarkdown(
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
     const nextBlock = i < blocks.length - 1 ? blocks[i + 1] : null;
-    console.log(`  - Converting block type: ${block.type}`);
+    logger.debug(`Converting block type: ${block.type}`);
 
     // Reset numbered list counter when not in a numbered list
     if (block.type !== "numbered_list_item") {
@@ -50,7 +56,6 @@ export async function convertBlocksToMarkdown(
 
     // Convert current block
     const blockMarkdown = await convertBlockToMarkdown(
-      notion,
       block,
       destinationDir,
       numberedListCounter,
@@ -69,20 +74,18 @@ export async function convertBlocksToMarkdown(
     convertedBlocks++;
 
     if (convertedBlocks % 10 === 0) {
-      console.log(
-        `  - Converted ${convertedBlocks}/${blocks.length} blocks...`,
-      );
+      logger.log(`Converted ${convertedBlocks}/${blocks.length} blocks...`);
     }
   }
 
-  console.log(
-    `  - Completed conversion of all ${blocks.length} blocks to Markdown`,
-  );
+  logger.log(`Completed conversion of all ${blocks.length} blocks to Markdown`);
   return markdown.trim();
 }
 
 /**
  * Check if block type is a list item type
+ * @param blockType Type of the block
+ * @returns True if the block is a list item
  */
 function isListItem(blockType: string): boolean {
   return ["bulleted_list_item", "numbered_list_item", "to_do"].includes(
@@ -92,148 +95,140 @@ function isListItem(blockType: string): boolean {
 
 /**
  * Convert a single Notion block to Markdown
- * @param notion Notion API client
  * @param block Block to convert
+ * @param destinationDir Destination directory for assets
+ * @param numberedListIndex Index for numbered list items
  * @returns Text in Markdown format
  */
 async function convertBlockToMarkdown(
-  notion: Client,
   block: BlockObjectResponse,
   destinationDir: string = "",
   numberedListIndex: number = 0,
 ): Promise<string> {
-  switch (block.type) {
-    case "paragraph":
-      return convertParagraph(block);
+  const blockHandlers: Record<string, Function> = {
+    paragraph: () => convertParagraph(block),
+    heading_1: () => convertHeading1(block),
+    heading_2: () => convertHeading2(block),
+    heading_3: () => convertHeading3(block),
+    bulleted_list_item: () => convertBulletedListItem(block),
+    numbered_list_item: () => convertNumberedListItem(block, numberedListIndex),
+    to_do: () => convertToDo(block),
+    toggle: () => convertToggle(block as BlockWithChildren, destinationDir),
+    code: () => convertCode(block),
+    quote: () => convertQuote(block),
+    divider: () => "---",
+    callout: () => convertCallout(block),
+    image: () => convertImage(block, destinationDir),
+    table: () => convertTable(block as BlockWithChildren),
+    child_page: () => {
+      if (block.type === "child_page") {
+        return `[${
+          block.child_page.title
+        }](https://www.notion.so/${block.id.replace(/-/g, "")})`;
+      }
+      return "";
+    },
+    child_database: () => {
+      if (block.type === "child_database") {
+        return `[Database: ${
+          block.id
+        }](https://www.notion.so/${block.id.replace(/-/g, "")})`;
+      }
+      return "";
+    },
+  };
 
-    case "heading_1":
-      return convertHeading1(block);
-
-    case "heading_2":
-      return convertHeading2(block);
-
-    case "heading_3":
-      return convertHeading3(block);
-
-    case "bulleted_list_item":
-      return convertBulletedListItem(block);
-
-    case "numbered_list_item":
-      return convertNumberedListItem(block, numberedListIndex);
-
-    case "to_do":
-      return convertToDo(block);
-
-    case "toggle":
-      return await convertToggle(notion, block, destinationDir);
-
-    case "code":
-      return convertCode(block);
-
-    case "quote":
-      return convertQuote(block);
-
-    case "divider":
-      return "---";
-
-    case "callout":
-      return convertCallout(block);
-
-    case "image":
-      return await convertImage(block, destinationDir);
-
-    case "table":
-      return await convertTable(notion, block, destinationDir);
-
-    case "child_page":
-      return `[${
-        block.child_page.title
-      }](https://www.notion.so/${block.id.replace(/-/g, "")})`;
-
-    case "child_database":
-      return `[Database: ${block.id}](https://www.notion.so/${block.id.replace(
-        /-/g,
-        "",
-      )})`;
-
-    default:
-      return `<!-- Unsupported block type: ${block.type} -->`;
+  const handler = blockHandlers[block.type];
+  if (handler) {
+    return await handler();
   }
+
+  return `<!-- Unsupported block type: ${block.type} -->`;
 }
 
 /**
  * Convert paragraph block
+ * @param block Paragraph block
+ * @returns Markdown text
  */
 function convertParagraph(block: BlockObjectResponse): string {
   if (block.type !== "paragraph") return "";
-
   return convertRichText(block.paragraph.rich_text);
 }
 
 /**
- * Convert heading 1
+ * Convert heading 1 block
+ * @param block Heading 1 block
+ * @returns Markdown text
  */
 function convertHeading1(block: BlockObjectResponse): string {
   if (block.type !== "heading_1") return "";
-
   return `# ${convertRichText(block.heading_1.rich_text)}`;
 }
 
 /**
- * Convert heading 2
+ * Convert heading 2 block
+ * @param block Heading 2 block
+ * @returns Markdown text
  */
 function convertHeading2(block: BlockObjectResponse): string {
   if (block.type !== "heading_2") return "";
-
   return `## ${convertRichText(block.heading_2.rich_text)}`;
 }
 
 /**
- * Convert heading 3
+ * Convert heading 3 block
+ * @param block Heading 3 block
+ * @returns Markdown text
  */
 function convertHeading3(block: BlockObjectResponse): string {
   if (block.type !== "heading_3") return "";
-
   return `### ${convertRichText(block.heading_3.rich_text)}`;
 }
 
 /**
- * Convert bulleted list item
+ * Convert bulleted list item block
+ * @param block Bulleted list item block
+ * @returns Markdown text
  */
 function convertBulletedListItem(block: BlockObjectResponse): string {
   if (block.type !== "bulleted_list_item") return "";
-
   return `- ${convertRichText(block.bulleted_list_item.rich_text)}`;
 }
 
 /**
- * Convert numbered list item
+ * Convert numbered list item block
+ * @param block Numbered list item block
+ * @param index Index for the numbered list item
+ * @returns Markdown text
  */
 function convertNumberedListItem(
   block: BlockObjectResponse,
   index: number = 1,
 ): string {
   if (block.type !== "numbered_list_item") return "";
-
   return `${index}. ${convertRichText(block.numbered_list_item.rich_text)}`;
 }
 
 /**
- * Convert ToDo list item
+ * Convert ToDo list item block
+ * @param block ToDo block
+ * @returns Markdown text
  */
 function convertToDo(block: BlockObjectResponse): string {
   if (block.type !== "to_do") return "";
-
   const checkbox = block.to_do.checked ? "[x]" : "[ ]";
   return `- ${checkbox} ${convertRichText(block.to_do.rich_text)}`;
 }
 
 /**
  * Convert toggle block
+ * @param block Toggle block
+ * @param destinationDir Destination directory for assets
+ * @returns Markdown text
  */
 async function convertToggle(
-  notion: Client,
-  block: BlockObjectResponse,
+  block: BlockWithChildren,
   destinationDir: string = "",
 ): Promise<string> {
   if (block.type !== "toggle") return "";
@@ -242,12 +237,8 @@ async function convertToggle(
 
   // If there are child blocks, convert them recursively
   let content = "";
-  if (block.has_children) {
-    // @ts-ignore - children property is dynamically added
-    const children = (block as any).children;
-    if (children) {
-      content = await convertBlocksToMarkdown(notion, children, destinationDir);
-    }
+  if (block.has_children && block.children) {
+    content = await convertBlocksToMarkdown(block.children, destinationDir);
   }
 
   // Markdown doesn't directly support toggles, so use details/summary tags
@@ -260,6 +251,8 @@ async function convertToggle(
 
 /**
  * Convert code block
+ * @param block Code block
+ * @returns Markdown text
  */
 function convertCode(block: BlockObjectResponse): string {
   if (block.type !== "code") return "";
@@ -274,6 +267,8 @@ ${code}
 
 /**
  * Convert quote block
+ * @param block Quote block
+ * @returns Markdown text
  */
 function convertQuote(block: BlockObjectResponse): string {
   if (block.type !== "quote") return "";
@@ -284,6 +279,8 @@ function convertQuote(block: BlockObjectResponse): string {
 
 /**
  * Convert callout block
+ * @param block Callout block
+ * @returns Markdown text
  */
 function convertCallout(block: BlockObjectResponse): string {
   if (block.type !== "callout") return "";
@@ -299,6 +296,9 @@ function convertCallout(block: BlockObjectResponse): string {
 
 /**
  * Convert image block
+ * @param block Image block
+ * @param destinationDir Destination directory for assets
+ * @returns Markdown text
  */
 async function convertImage(
   block: BlockObjectResponse,
@@ -327,10 +327,8 @@ async function convertImage(
   try {
     // Create images directory if it doesn't exist
     const imagesDir = path.join(destinationDir, "images");
-    if (!fs.existsSync(imagesDir)) {
-      fs.mkdirSync(imagesDir, { recursive: true });
-      console.log(`  - Created images directory: ${imagesDir}`);
-    }
+    ensureDirectoryExists(imagesDir);
+    logger.log(`Ensuring images directory exists: ${imagesDir}`);
 
     // Generate a unique filename based on URL (without query parameters)
     const baseUrl = url.split("?")[0]; // Remove query parameters
@@ -342,18 +340,18 @@ async function convertImage(
 
     // Download the image if it doesn't exist
     if (!fs.existsSync(filePath)) {
-      console.log(`  - Downloading image from ${url}`);
+      logger.log(`Downloading image from ${url}`);
       await downloadImage(url, filePath);
-      console.log(`  - Image saved to ${filePath}`);
+      logger.log(`Image saved to ${filePath}`);
     } else {
-      console.log(`  - Image already exists at ${filePath}`);
+      logger.log(`Image already exists at ${filePath}`);
     }
 
     // Return markdown with local image reference
     return `![${caption}](${relativeFilePath.replace(/\\/g, "/")})`;
   } catch (error) {
-    console.error(
-      `  - Error downloading image: ${
+    logger.error(
+      `Error downloading image: ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
@@ -363,88 +361,21 @@ async function convertImage(
 }
 
 /**
- * Download an image from a URL and save it to a file
- */
-function downloadImage(url: string, filePath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    https
-      .get(url, (response) => {
-        // Check if response is successful
-        if (response.statusCode !== 200) {
-          reject(
-            new Error(
-              `Failed to download image: ${response.statusCode} ${response.statusMessage}`,
-            ),
-          );
-          return;
-        }
-
-        // Create write stream
-        const fileStream = fs.createWriteStream(filePath);
-
-        // Pipe response to file
-        response.pipe(fileStream);
-
-        // Handle events
-        fileStream.on("finish", () => {
-          fileStream.close();
-          resolve();
-        });
-
-        fileStream.on("error", (err) => {
-          fs.unlink(filePath, () => {}); // Delete file if error occurs
-          reject(err);
-        });
-      })
-      .on("error", (err) => {
-        reject(err);
-      });
-  });
-}
-
-/**
- * Get image file extension from URL
- */
-function getImageExtension(url: string): string {
-  // Try to extract extension from URL
-  const match = url.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
-  if (match && match[1]) {
-    const ext = match[1].toLowerCase();
-    // Check if it's a common image extension
-    if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) {
-      return `.${ext}`;
-    }
-  }
-
-  // Default to .jpg if extension can't be determined
-  return ".jpg";
-}
-
-/**
  * Convert table block
+ * @param notion Notion API client
+ * @param block Table block
+ * @param destinationDir Destination directory for assets
+ * @returns Markdown text
  */
-async function convertTable(
-  notion: Client,
-  block: BlockObjectResponse,
-  destinationDir: string = "",
-): Promise<string> {
+async function convertTable(block: BlockWithChildren): Promise<string> {
   if (block.type !== "table") return "";
 
   // Get table row and column counts
-  const rowCount = block.table.has_row_header
-    ? block.table.has_row_header
-    : false;
-  const colCount = block.table.has_column_header
-    ? block.table.has_column_header
-    : false;
+  const hasRowHeader = block.table.has_row_header;
+  const hasColumnHeader = block.table.has_column_header;
 
   // Get table child blocks (rows)
-  let rows: BlockObjectResponse[] = [];
-  // children property is dynamically added
-  const children = (block as any).children;
-  if (children) {
-    rows = children;
-  }
+  const rows = block.children || [];
 
   if (rows.length === 0) {
     return "<!-- Empty table -->";
@@ -465,7 +396,7 @@ async function convertTable(
     markdown += `| ${cells.join(" | ")} |\n`;
 
     // Add header separator line after first row
-    if (firstRow && colCount) {
+    if (firstRow && hasColumnHeader) {
       markdown += `| ${cells.map(() => "---").join(" | ")} |\n`;
       firstRow = false;
     }

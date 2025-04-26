@@ -1,0 +1,12 @@
+# Bun configuration file
+
+[test]
+# Configure test runner behavior
+# preload = ["test/setup.ts"]  # Commented out until setup file is ready
+timeout = 10000              # Timeout for tests in milliseconds
+bail = false                 # Don't stop on first failure
+coverage = false             # Don't generate coverage by default
+
+[install]
+# Package manager configuration
+registry = "https://registry.npmjs.org/"
