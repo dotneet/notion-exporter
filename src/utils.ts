@@ -2,8 +2,8 @@
  * Notion Exporter - Utility Functions
  */
 
-import * as fs from "fs";
-import * as https from "https";
+import * as fs from "node:fs"
+import * as https from "node:https"
 
 /**
  * Ensure a directory exists, creating it if necessary
@@ -12,10 +12,10 @@ import * as https from "https";
  */
 export function ensureDirectoryExists(dirPath: string): boolean {
   if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath, { recursive: true });
-    return true;
+    fs.mkdirSync(dirPath, { recursive: true })
+    return true
   }
-  return false;
+  return false
 }
 
 /**
@@ -26,7 +26,7 @@ export function ensureDirectoryExists(dirPath: string): boolean {
 export function getSafeFilename(title: string): string {
   // Check for empty string or "Untitled" first
   if (!title || title.trim() === "" || title === "Untitled") {
-    return "Untitled";
+    return "Untitled"
   }
 
   // Replace characters that cannot be used in filenames
@@ -38,20 +38,20 @@ export function getSafeFilename(title: string): string {
     // Remove unnecessary characters from the beginning and end
     .replace(/^[.\s]+|[.\s]+$/g, "")
     // Combine consecutive underscores into one
-    .replace(/_+/g, "_");
+    .replace(/_+/g, "_")
 
   // Use default value if the string is empty after replacements
   if (!safeTitle || safeTitle.trim() === "") {
-    return "Untitled";
+    return "Untitled"
   }
 
   // Limit filename length (too long can cause problems in file systems)
-  const MAX_FILENAME_LENGTH = 100;
+  const MAX_FILENAME_LENGTH = 100
   if (safeTitle.length > MAX_FILENAME_LENGTH) {
-    safeTitle = safeTitle.substring(0, MAX_FILENAME_LENGTH);
+    safeTitle = safeTitle.substring(0, MAX_FILENAME_LENGTH)
   }
 
-  return safeTitle;
+  return safeTitle
 }
 
 /**
@@ -70,31 +70,31 @@ export function downloadImage(url: string, filePath: string): Promise<void> {
             new Error(
               `Failed to download image: ${response.statusCode} ${response.statusMessage}`,
             ),
-          );
-          return;
+          )
+          return
         }
 
         // Create write stream
-        const fileStream = fs.createWriteStream(filePath);
+        const fileStream = fs.createWriteStream(filePath)
 
         // Pipe response to file
-        response.pipe(fileStream);
+        response.pipe(fileStream)
 
         // Handle events
         fileStream.on("finish", () => {
-          fileStream.close();
-          resolve();
-        });
+          fileStream.close()
+          resolve()
+        })
 
         fileStream.on("error", (err) => {
-          fs.unlink(filePath, () => {}); // Delete file if error occurs
-          reject(err);
-        });
+          fs.unlink(filePath, () => {}) // Delete file if error occurs
+          reject(err)
+        })
       })
       .on("error", (err) => {
-        reject(err);
-      });
-  });
+        reject(err)
+      })
+  })
 }
 
 /**
@@ -104,17 +104,17 @@ export function downloadImage(url: string, filePath: string): Promise<void> {
  */
 export function getImageExtension(url: string): string {
   // Try to extract extension from URL
-  const match = url.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
-  if (match && match[1]) {
-    const ext = match[1].toLowerCase();
+  const match = url.match(/\.([a-zA-Z0-9]+)(?:\?|$)/)
+  if (match?.[1]) {
+    const ext = match[1].toLowerCase()
     // Check if it's a common image extension
     if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) {
-      return `.${ext}`;
+      return `.${ext}`
     }
   }
 
   // Default to .jpg if extension can't be determined
-  return ".jpg";
+  return ".jpg"
 }
 
 /**
@@ -123,7 +123,7 @@ export function getImageExtension(url: string): string {
  * @returns Object with logging methods
  */
 export function createLogger(prefix: string) {
-  const formatMessage = (message: string) => `[${prefix}] ${message}`;
+  const formatMessage = (message: string) => `[${prefix}] ${message}`
 
   return {
     log: (message: string) => console.log(formatMessage(message)),
@@ -131,8 +131,8 @@ export function createLogger(prefix: string) {
     warn: (message: string) => console.warn(formatMessage(message)),
     debug: (message: string) => {
       if (process.env.DEBUG) {
-        console.debug(formatMessage(message));
+        console.debug(formatMessage(message))
       }
     },
-  };
+  }
 }

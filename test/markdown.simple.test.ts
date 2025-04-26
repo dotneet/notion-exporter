@@ -1,21 +1,21 @@
-import { expect, test, describe } from "bun:test";
-import { BlockObjectResponse } from "@notionhq/client/build/src/api-endpoints";
-import * as fs from "fs";
-import * as path from "path";
+import { describe, expect, test } from "bun:test"
+import * as fs from "node:fs"
+import * as path from "node:path"
+import type { BlockObjectResponse } from "@notionhq/client/build/src/api-endpoints"
 
 // Import the function to test
-import { convertBlocksToMarkdown } from "../src/markdown";
+import { convertBlocksToMarkdown } from "../src/markdown"
 
 describe("Markdown Conversion", () => {
-  const TEST_DIR = path.join(process.cwd(), "test", "temp");
+  const TEST_DIR = path.join(process.cwd(), "test", "temp")
 
   // Setup
   test("setup", () => {
     // Create test directory if it doesn't exist
     if (!fs.existsSync(TEST_DIR)) {
-      fs.mkdirSync(TEST_DIR, { recursive: true });
+      fs.mkdirSync(TEST_DIR, { recursive: true })
     }
-  });
+  })
 
   // Test simple paragraph conversion
   test("should convert simple blocks to markdown", async () => {
@@ -45,19 +45,19 @@ describe("Markdown Conversion", () => {
         },
         has_children: false,
       } as BlockObjectResponse,
-    ];
+    ]
 
     // Convert to markdown
-    const markdown = await convertBlocksToMarkdown(blocks, TEST_DIR);
+    const markdown = await convertBlocksToMarkdown(blocks, TEST_DIR)
 
     // Verify
-    expect(markdown).toContain("This is a test paragraph");
-  });
+    expect(markdown).toContain("This is a test paragraph")
+  })
 
   // Test cleanup
   test("cleanup", () => {
     if (fs.existsSync(TEST_DIR)) {
-      fs.rmSync(TEST_DIR, { recursive: true, force: true });
+      fs.rmSync(TEST_DIR, { recursive: true, force: true })
     }
-  });
-});
+  })
+})
