@@ -23,5 +23,5 @@ runs:
   image: 'Dockerfile.github_actions'
 
 branding:
-  icon: 'download'
-  color: 'blue'
+  icon: 'file-text'
+  color: 'gray-dark'
