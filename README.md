@@ -95,7 +95,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Export Notion page
-        uses: dotneet/notion-exporter@v1
+        uses: dotneet/notion-exporter@main
         with:
           notion_token: ${{ secrets.NOTION_TOKEN }}
           page_id: ${{ github.event.inputs.page_id }}
