@@ -21,5 +21,5 @@ fi
 ARGS+=("${PAGE_ID}" "${DEST_DIR}")
 
 # Run the export command
-echo "Running: node dist/index.js ${ARGS[@]}"
-exec node dist/index.js "${ARGS[@]}"
+echo "Running: bun run src/index.ts ${ARGS[@]}"
+exec bun run src/index.ts "${ARGS[@]}"
