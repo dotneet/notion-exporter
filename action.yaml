@@ -1,0 +1,27 @@
+name: 'Notion Exporter'
+description: 'Export Notion pages to markdown files'
+author: 'Shinji Yamada'
+
+inputs:
+  notion_token:
+    description: 'Notion integration token'
+    required: true
+  page_id:
+    description: 'Notion page ID to export'
+    required: true
+  dest_dir:
+    description: 'Destination directory for exported files'
+    required: false
+    default: './notion-export'
+  recursive:
+    description: 'Export child pages recursively (true/false)'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile.github_actions'
+
+branding:
+  icon: 'file-text'
+  color: 'gray-dark'

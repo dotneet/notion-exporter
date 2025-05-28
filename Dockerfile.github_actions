@@ -1,0 +1,29 @@
+FROM oven/bun:1.2.14
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y git && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy package files first for better Docker layer caching
+COPY package.json bun.lock ./
+
+# Install Node.js dependencies
+RUN bun install --frozen-lockfile
+
+# Copy source code
+COPY src/ ./src/
+COPY tsconfig.json ./
+
+# Build the TypeScript project
+RUN bun run build
+
+# Copy and prepare entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Set entrypoint
+ENTRYPOINT ["/entrypoint.sh"]

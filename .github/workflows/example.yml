@@ -1,0 +1,41 @@
+name: Export Notion Page Example
+
+on:
+  workflow_dispatch:
+    inputs:
+      page_id:
+        description: 'Notion page ID to export'
+        required: true
+        type: string
+      dest_dir:
+        description: 'Destination directory'
+        required: false
+        default: './notion-export'
+        type: string
+      recursive:
+        description: 'Export child pages recursively'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Export Notion page
+        uses: ./
+        with:
+          notion_token: ${{ secrets.NOTION_TOKEN }}
+          page_id: ${{ github.event.inputs.page_id }}
+          dest_dir: ${{ github.event.inputs.dest_dir }}
+          recursive: ${{ github.event.inputs.recursive }}
+
+      - name: Upload exported files
+        uses: actions/upload-artifact@v4
+        with:
+          name: notion-export
+          path: ${{ github.event.inputs.dest_dir }}
+          if-no-files-found: error
