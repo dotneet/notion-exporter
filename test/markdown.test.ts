@@ -387,6 +387,31 @@ describe("Markdown Conversion", () => {
       expect(result).toContain("**Bold** and *italic* and `code`")
     })
 
+    test("should convert link preview blocks", async () => {
+      // Mock link preview block
+      const mockBlocks: Partial<BlockObjectResponse>[] = [
+        {
+          id: "block-1",
+          type: "link_preview",
+          link_preview: {
+            url: "https://github.com/example/example-repo/pull/1234",
+          },
+          has_children: false,
+        },
+      ]
+
+      // Call function
+      const result = await convertBlocksToMarkdown(
+        mockBlocks as BlockObjectResponse[],
+        TEST_DIR,
+      )
+
+      // Verify
+      expect(result).toContain(
+        "https://github.com/example/example-repo/pull/1234",
+      )
+    })
+
     test("should convert table of contents block", async () => {
       // Mock blocks with headings and table of contents
       const mockBlocks: Partial<BlockObjectResponse>[] = [

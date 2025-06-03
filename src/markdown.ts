@@ -123,6 +123,7 @@ async function convertBlockToMarkdown(
     callout: () => convertCallout(block),
     image: () => convertImage(block, destinationDir),
     table: () => convertTable(block as BlockWithChildren),
+    link_preview: () => convertLinkPreview(block),
     child_page: () => {
       if (block.type === "child_page") {
         return `[${
@@ -421,6 +422,17 @@ async function convertTable(block: BlockWithChildren): Promise<string> {
   }
 
   return markdown
+}
+
+/**
+ * Convert link preview block
+ * @param block Link preview block
+ * @returns Markdown text
+ */
+function convertLinkPreview(block: BlockObjectResponse): string {
+  if (block.type !== "link_preview") return ""
+
+  return block.link_preview.url
 }
 
 /**
