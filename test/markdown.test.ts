@@ -52,6 +52,7 @@ describe("Markdown Conversion", () => {
                 href: null,
               },
             ],
+            color: "default",
           },
           has_children: false,
         },
@@ -91,6 +92,7 @@ describe("Markdown Conversion", () => {
               },
             ],
             color: "default",
+            is_toggleable: false,
           },
           has_children: false,
         },
@@ -115,6 +117,7 @@ describe("Markdown Conversion", () => {
               },
             ],
             color: "default",
+            is_toggleable: false,
           },
           has_children: false,
         },
@@ -139,6 +142,7 @@ describe("Markdown Conversion", () => {
               },
             ],
             color: "default",
+            is_toggleable: false,
           },
           has_children: false,
         },
@@ -381,6 +385,353 @@ describe("Markdown Conversion", () => {
 
       // Verify
       expect(result).toContain("**Bold** and *italic* and `code`")
+    })
+
+    test("should convert table of contents block", async () => {
+      // Mock blocks with headings and table of contents
+      const mockBlocks: Partial<BlockObjectResponse>[] = [
+        {
+          id: "block-1",
+          type: "heading_1",
+          heading_1: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "Introduction", link: null },
+                annotations: {
+                  bold: false,
+                  italic: false,
+                  strikethrough: false,
+                  underline: false,
+                  code: false,
+                  color: "default",
+                },
+                plain_text: "Introduction",
+                href: null,
+              },
+            ],
+            color: "default",
+            is_toggleable: false,
+          },
+          has_children: false,
+        },
+        {
+          id: "block-2",
+          type: "heading_2",
+          heading_2: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "Getting Started", link: null },
+                annotations: {
+                  bold: false,
+                  italic: false,
+                  strikethrough: false,
+                  underline: false,
+                  code: false,
+                  color: "default",
+                },
+                plain_text: "Getting Started",
+                href: null,
+              },
+            ],
+            color: "default",
+            is_toggleable: false,
+          },
+          has_children: false,
+        },
+        {
+          id: "block-3",
+          type: "table_of_contents",
+          table_of_contents: {
+            color: "default",
+          },
+          has_children: false,
+        },
+        {
+          id: "block-4",
+          type: "heading_3",
+          heading_3: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "Installation", link: null },
+                annotations: {
+                  bold: false,
+                  italic: false,
+                  strikethrough: false,
+                  underline: false,
+                  code: false,
+                  color: "default",
+                },
+                plain_text: "Installation",
+                href: null,
+              },
+            ],
+            color: "default",
+            is_toggleable: false,
+          },
+          has_children: false,
+        },
+      ]
+
+      // Call function
+      const result = await convertBlocksToMarkdown(
+        mockBlocks as BlockObjectResponse[],
+        TEST_DIR,
+      )
+
+      // Verify table of contents generation
+      expect(result).toContain("- [Introduction](#Introduction)")
+      expect(result).toContain("  - [Getting Started](#Getting-Started)")
+      expect(result).toContain("    - [Installation](#Installation)")
+    })
+
+    test("should handle empty table of contents", async () => {
+      // Mock table of contents block without any headings
+      const mockBlocks: Partial<BlockObjectResponse>[] = [
+        {
+          id: "block-1",
+          type: "paragraph",
+          paragraph: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "Some content", link: null },
+                annotations: {
+                  bold: false,
+                  italic: false,
+                  strikethrough: false,
+                  underline: false,
+                  code: false,
+                  color: "default",
+                },
+                plain_text: "Some content",
+                href: null,
+              },
+            ],
+            color: "default",
+          },
+          has_children: false,
+        },
+        {
+          id: "block-2",
+          type: "table_of_contents",
+          table_of_contents: {
+            color: "default",
+          },
+          has_children: false,
+        },
+      ]
+
+      // Call function
+      const result = await convertBlocksToMarkdown(
+        mockBlocks as BlockObjectResponse[],
+        TEST_DIR,
+      )
+
+      // Verify empty table of contents handling
+      expect(result).toContain(
+        "<!-- No headings found for table of contents -->",
+      )
+    })
+
+    test("should create proper anchor links for table of contents", async () => {
+      // Mock blocks with special characters in headings
+      const mockBlocks: Partial<BlockObjectResponse>[] = [
+        {
+          id: "block-1",
+          type: "heading_1",
+          heading_1: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "API & Configuration", link: null },
+                annotations: {
+                  bold: false,
+                  italic: false,
+                  strikethrough: false,
+                  underline: false,
+                  code: false,
+                  color: "default",
+                },
+                plain_text: "API & Configuration",
+                href: null,
+              },
+            ],
+            color: "default",
+            is_toggleable: false,
+          },
+          has_children: false,
+        },
+        {
+          id: "block-2",
+          type: "table_of_contents",
+          table_of_contents: {
+            color: "default",
+          },
+          has_children: false,
+        },
+      ]
+
+      // Call function
+      const result = await convertBlocksToMarkdown(
+        mockBlocks as BlockObjectResponse[],
+        TEST_DIR,
+      )
+
+      // Verify anchor link normalization
+      expect(result).toContain("- [API & Configuration](#API-&-Configuration)")
+    })
+
+    test("should handle parentheses in anchor links", async () => {
+      // Mock blocks with parentheses in headings
+      const mockBlocks: Partial<BlockObjectResponse>[] = [
+        {
+          id: "block-1",
+          type: "heading_1",
+          heading_1: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "API Reference (v2.0)", link: null },
+                annotations: {
+                  bold: false,
+                  italic: false,
+                  strikethrough: false,
+                  underline: false,
+                  code: false,
+                  color: "default",
+                },
+                plain_text: "API Reference (v2.0)",
+                href: null,
+              },
+            ],
+            color: "default",
+            is_toggleable: false,
+          },
+          has_children: false,
+        },
+        {
+          id: "block-2",
+          type: "heading_2",
+          heading_2: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "設定項目 (基本)", link: null },
+                annotations: {
+                  bold: false,
+                  italic: false,
+                  strikethrough: false,
+                  underline: false,
+                  code: false,
+                  color: "default",
+                },
+                plain_text: "設定項目 (基本)",
+                href: null,
+              },
+            ],
+            color: "default",
+            is_toggleable: false,
+          },
+          has_children: false,
+        },
+        {
+          id: "block-3",
+          type: "table_of_contents",
+          table_of_contents: {
+            color: "default",
+          },
+          has_children: false,
+        },
+      ]
+
+      // Call function
+      const result = await convertBlocksToMarkdown(
+        mockBlocks as BlockObjectResponse[],
+        TEST_DIR,
+      )
+
+      // Verify parentheses are converted to hyphens
+      expect(result).toContain("- [API Reference (v2.0)](#API-Reference-v2.0-)")
+      expect(result).toContain("  - [設定項目 (基本)](#設定項目-基本-)")
+    })
+
+    test("should handle hash and quotes in anchor links", async () => {
+      // Mock blocks with hash and quotes in headings
+      const mockBlocks: Partial<BlockObjectResponse>[] = [
+        {
+          id: "block-1",
+          type: "heading_1",
+          heading_1: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: 'Step #1: "Hello World"', link: null },
+                annotations: {
+                  bold: false,
+                  italic: false,
+                  strikethrough: false,
+                  underline: false,
+                  code: false,
+                  color: "default",
+                },
+                plain_text: 'Step #1: "Hello World"',
+                href: null,
+              },
+            ],
+            color: "default",
+            is_toggleable: false,
+          },
+          has_children: false,
+        },
+        {
+          id: "block-2",
+          type: "heading_2",
+          heading_2: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "機能 #2: 'テスト'", link: null },
+                annotations: {
+                  bold: false,
+                  italic: false,
+                  strikethrough: false,
+                  underline: false,
+                  code: false,
+                  color: "default",
+                },
+                plain_text: "機能 #2: 'テスト'",
+                href: null,
+              },
+            ],
+            color: "default",
+            is_toggleable: false,
+          },
+          has_children: false,
+        },
+        {
+          id: "block-3",
+          type: "table_of_contents",
+          table_of_contents: {
+            color: "default",
+          },
+          has_children: false,
+        },
+      ]
+
+      // Call function
+      const result = await convertBlocksToMarkdown(
+        mockBlocks as BlockObjectResponse[],
+        TEST_DIR,
+      )
+
+      // Verify hash and quotes are converted to hyphens
+      expect(result).toContain(
+        '- [Step #1: "Hello World"](#Step-1-Hello-World-)',
+      )
+      expect(result).toContain("  - [機能 #2: 'テスト'](#機能-2-テスト-)")
     })
   })
 })

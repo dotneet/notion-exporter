@@ -59,6 +59,7 @@ export async function convertBlocksToMarkdown(
       block,
       destinationDir,
       numberedListCounter,
+      blocks,
     )
 
     // Determine appropriate separator based on block types
@@ -98,12 +99,14 @@ function isListItem(blockType: string): boolean {
  * @param block Block to convert
  * @param destinationDir Destination directory for assets
  * @param numberedListIndex Index for numbered list items
+ * @param allBlocks All blocks in the document (needed for table of contents)
  * @returns Text in Markdown format
  */
 async function convertBlockToMarkdown(
   block: BlockObjectResponse,
   destinationDir = "",
   numberedListIndex = 0,
+  allBlocks: BlockObjectResponse[] = [],
 ): Promise<string> {
   const blockHandlers: Record<string, () => string | Promise<string>> = {
     paragraph: () => convertParagraph(block),
@@ -136,6 +139,7 @@ async function convertBlockToMarkdown(
       }
       return ""
     },
+    table_of_contents: () => convertTableOfContents(allBlocks),
   }
 
   const handler = blockHandlers[block.type]
@@ -465,4 +469,63 @@ function convertRichText(richText: NotionRichText[]): string {
       return content
     })
     .join("")
+}
+
+/**
+ * Convert table of contents block
+ * @param allBlocks All blocks in the document
+ * @returns Markdown table of contents
+ */
+function convertTableOfContents(allBlocks: BlockObjectResponse[]): string {
+  logger.debug("Converting table of contents block")
+
+  // Extract all heading blocks
+  const headings = allBlocks.filter(
+    (block) =>
+      block.type === "heading_1" ||
+      block.type === "heading_2" ||
+      block.type === "heading_3",
+  )
+
+  if (headings.length === 0) {
+    return "<!-- No headings found for table of contents -->"
+  }
+
+  logger.log(`Generating table of contents with ${headings.length} headings`)
+
+  // Generate table of contents
+  const tocLines = headings.map((heading) => {
+    let text = ""
+    let level = 0
+
+    if (heading.type === "heading_1") {
+      text = convertRichText(heading.heading_1.rich_text)
+      level = 1
+    } else if (heading.type === "heading_2") {
+      text = convertRichText(heading.heading_2.rich_text)
+      level = 2
+    } else if (heading.type === "heading_3") {
+      text = convertRichText(heading.heading_3.rich_text)
+      level = 3
+    }
+
+    // Create anchor link (GitHub-style)
+    const anchor = createAnchorLink(text)
+
+    // Create indentation based on heading level
+    const indent = "  ".repeat(level - 1)
+
+    return `${indent}- [${text}](#${anchor})`
+  })
+
+  return tocLines.join("\n")
+}
+
+/**
+ * Create anchor link from heading text
+ * @param text Heading text
+ * @returns Anchor link string
+ */
+function createAnchorLink(text: string): string {
+  return text.replace(/[\s()#"'"'"':]+/g, "-")
 }
