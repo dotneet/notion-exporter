@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "ignore": ["node_modules", "dist", "coverage", ".git"]
+    "ignore": ["node_modules", ".claude", "dist", "coverage", ".git"]
   },
   "formatter": {
     "enabled": true,

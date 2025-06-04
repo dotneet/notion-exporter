@@ -3,6 +3,7 @@
  * Notion Exporter - CLI Interface
  */
 
+import { parseArgs } from "node:util"
 import { exportNotionPage } from "./export"
 import { createLogger } from "./utils"
 
@@ -10,34 +11,101 @@ import { createLogger } from "./utils"
 const logger = createLogger("CLI")
 
 /**
- * Parse command line arguments
+ * Display help message
+ */
+function displayHelp() {
+  console.log("Notion to Markdown Exporter v0.1.1")
+  console.log("\nUsage:")
+  console.log(
+    "  bunx @devneko/notion-exporter [options] <notion-page-id> <destination-dir>",
+  )
+  console.log("\nArguments:")
+  console.log("  <notion-page-id>      The ID of the Notion page to export")
+  console.log(
+    "  <destination-dir>     Directory where the markdown file will be saved",
+  )
+  console.log("\nOptions:")
+  console.log("  --recursive, -r      Export child pages recursively")
+  console.log(
+    "  --name, -n           Custom filename for the exported markdown file",
+  )
+  console.log("  --help, -h           Show this help message")
+  console.log("  --version, -v        Show version number")
+  console.log("\nEnvironment Variables:")
+  console.log(
+    "  NOTION_TOKEN         Your Notion API integration token (required)",
+  )
+  console.log("  DEBUG=true           Enable debug logging")
+  console.log("\nExamples:")
+  console.log("  # Export a single page")
+  console.log(
+    "  NOTION_TOKEN=your_token bunx @devneko/notion-exporter abc123def456 ./output",
+  )
+  console.log("\n  # Export a page and all its subpages")
+  console.log(
+    "  NOTION_TOKEN=your_token bunx @devneko/notion-exporter --recursive abc123def456 ./output",
+  )
+  console.log("\n  # Export with custom filename")
+  console.log(
+    "  NOTION_TOKEN=your_token bunx @devneko/notion-exporter --name my-custom-name abc123def456 ./output",
+  )
+}
+
+/**
+ * Parse command line arguments using parseArgs
  * @returns Parsed arguments object
  */
 function parseArguments() {
-  const args = process.argv.slice(2)
-  let recursive = false
-  let pageId = ""
-  let destinationDir = ""
+  const { values, positionals } = parseArgs({
+    args: process.argv.slice(2),
+    options: {
+      recursive: {
+        type: "boolean",
+        short: "r",
+        default: false,
+      },
+      name: {
+        type: "string",
+        short: "n",
+      },
+      help: {
+        type: "boolean",
+        short: "h",
+      },
+      version: {
+        type: "boolean",
+        short: "v",
+      },
+    },
+    strict: true,
+    allowPositionals: true,
+  })
 
-  // Process --recursive option
-  if (args.includes("--recursive")) {
-    recursive = true
-    const recursiveIndex = args.indexOf("--recursive")
-    args.splice(recursiveIndex, 1)
+  // Handle --help flag
+  if (values.help) {
+    displayHelp()
+    process.exit(0)
   }
 
-  // Process required arguments
-  if (args.length < 2) {
-    console.error(
-      "Usage: bunx notion-exporter [--recursive] <notion-page-id> <destination-dir>",
-    )
+  // Handle --version flag
+  if (values.version) {
+    console.log("0.1.1")
+    process.exit(0)
+  }
+
+  // Check if we have the required positional arguments
+  if (positionals.length < 2) {
+    console.error("Error: Missing required arguments\n")
+    displayHelp()
     process.exit(1)
   }
 
-  pageId = args[0]
-  destinationDir = args[1]
+  const pageId = positionals[0]
+  const destinationDir = positionals[1]
+  const recursive = values.recursive || false
+  const name = values.name
 
-  return { recursive, pageId, destinationDir }
+  return { recursive, pageId, destinationDir, name }
 }
 
 /**
@@ -72,7 +140,7 @@ function displayTroubleshootingTips() {
 async function main() {
   try {
     // Parse command line arguments
-    const { recursive, pageId, destinationDir } = parseArguments()
+    const { recursive, pageId, destinationDir, name } = parseArguments()
 
     // Validate environment
     validateEnvironment()
@@ -85,11 +153,19 @@ async function main() {
     console.log(`- Notion Page ID: ${pageId}`)
     console.log(`- Destination Directory: ${destinationDir}`)
     console.log(`- Recursive Mode: ${recursive ? "Enabled" : "Disabled"}`)
+    if (name) {
+      console.log(`- Custom Filename: ${name}`)
+    }
     console.log("=".repeat(50))
 
     // Execute export process
     logger.log("Initiating export process...")
-    const result = await exportNotionPage(pageId, destinationDir, recursive)
+    const result = await exportNotionPage(
+      pageId,
+      destinationDir,
+      recursive,
+      name,
+    )
 
     // Display export summary
     console.log(`\n${"=".repeat(50)}`)
