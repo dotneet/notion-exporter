@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { Client } from "@notionhq/client"
 import type { BlockObjectResponse } from "@notionhq/client/build/src/api-endpoints"
 import { convertBlocksToMarkdown } from "../src/markdown"
-import { BlockWithChildren } from "../src/types"
 
 describe("Markdown Conversion", () => {
   const TEST_DIR = path.join(process.cwd(), "test", "temp")
