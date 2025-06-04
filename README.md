@@ -32,7 +32,28 @@ bunx @devneko/notion-exporter --recursive notion-page-id destination-dir
 # destination-dir/notion-page-id/subpage-id-1/subsubpage-id-1.md
 # destination-dir/notion-page-id/subpage-id-2.md
 # destination-dir/notion-page-id/subpage-id-2/subsubpage-id-1.md
+
+# Export with a custom filename
+bunx @devneko/notion-exporter --name my-document notion-page-id destination-dir
+# will generates:
+# destination-dir/my-document.md
+
+# Export recursively with a custom filename
+bunx @devneko/notion-exporter --recursive --name my-docs notion-page-id destination-dir
+# will generates:
+# destination-dir/my-docs.md
+# destination-dir/my-docs/subpage-id-1.md
+# destination-dir/my-docs/subpage-id-2.md
 ```
+
+### Command-line Options
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--recursive` | `-r` | Export child pages recursively |
+| `--name` | `-n` | Specify a custom filename for the exported markdown file (without extension) |
+| `--help` | `-h` | Show help message |
+| `--version` | `-v` | Show version number |
 
 ### Building and Running with Node.js
 
@@ -43,7 +64,7 @@ You can build the project and run it with Node.js:
 bun run build
 
 # Run with Node.js
-node dist/index.js [--recursive] notion-page-id destination-dir
+node dist/index.js [--recursive] [--name filename] notion-page-id destination-dir
 ```
 
 ### GitHub Actions Usage

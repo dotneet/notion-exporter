@@ -26,6 +26,9 @@ function displayHelp() {
   )
   console.log("\nOptions:")
   console.log("  --recursive, -r      Export child pages recursively")
+  console.log(
+    "  --name, -n           Custom filename for the exported markdown file",
+  )
   console.log("  --help, -h           Show this help message")
   console.log("  --version, -v        Show version number")
   console.log("\nEnvironment Variables:")
@@ -42,6 +45,10 @@ function displayHelp() {
   console.log(
     "  NOTION_TOKEN=your_token bunx @devneko/notion-exporter --recursive abc123def456 ./output",
   )
+  console.log("\n  # Export with custom filename")
+  console.log(
+    "  NOTION_TOKEN=your_token bunx @devneko/notion-exporter --name my-custom-name abc123def456 ./output",
+  )
 }
 
 /**
@@ -56,6 +63,10 @@ function parseArguments() {
         type: "boolean",
         short: "r",
         default: false,
+      },
+      name: {
+        type: "string",
+        short: "n",
       },
       help: {
         type: "boolean",
@@ -92,8 +103,9 @@ function parseArguments() {
   const pageId = positionals[0]
   const destinationDir = positionals[1]
   const recursive = values.recursive || false
+  const name = values.name
 
-  return { recursive, pageId, destinationDir }
+  return { recursive, pageId, destinationDir, name }
 }
 
 /**
@@ -128,7 +140,7 @@ function displayTroubleshootingTips() {
 async function main() {
   try {
     // Parse command line arguments
-    const { recursive, pageId, destinationDir } = parseArguments()
+    const { recursive, pageId, destinationDir, name } = parseArguments()
 
     // Validate environment
     validateEnvironment()
@@ -141,11 +153,19 @@ async function main() {
     console.log(`- Notion Page ID: ${pageId}`)
     console.log(`- Destination Directory: ${destinationDir}`)
     console.log(`- Recursive Mode: ${recursive ? "Enabled" : "Disabled"}`)
+    if (name) {
+      console.log(`- Custom Filename: ${name}`)
+    }
     console.log("=".repeat(50))
 
     // Execute export process
     logger.log("Initiating export process...")
-    const result = await exportNotionPage(pageId, destinationDir, recursive)
+    const result = await exportNotionPage(
+      pageId,
+      destinationDir,
+      recursive,
+      name,
+    )
 
     // Display export summary
     console.log(`\n${"=".repeat(50)}`)

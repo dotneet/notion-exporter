@@ -3,12 +3,8 @@
  */
 
 import * as fs from "node:fs"
-import * as path from "node:path"
 import { Client } from "@notionhq/client"
-import {
-  type BlockObjectResponse,
-  PageObjectResponse,
-} from "@notionhq/client/build/src/api-endpoints"
+import type { BlockObjectResponse } from "@notionhq/client/build/src/api-endpoints"
 import { convertBlocksToMarkdown } from "./markdown"
 import {
   getNotionBlocks,
@@ -44,12 +40,14 @@ class NotionTokenError extends Error {
  * @param pageId ID of the Notion page to export
  * @param destinationDir Destination directory
  * @param recursive Whether to recursively export subpages
+ * @param customFilename Optional custom filename (without extension)
  * @returns Export result object
  */
 export async function exportNotionPage(
   pageId: string,
   destinationDir: string,
   recursive = false,
+  customFilename?: string,
 ): Promise<ExportResult> {
   logger.log(`Starting export of Notion page ${pageId}...`)
 
@@ -93,11 +91,19 @@ export async function exportNotionPage(
     logger.log(`Page title: "${pageTitle}"`)
 
     // Generate a safe title for use in filenames
-    const safeTitle = getSafeFilename(pageTitle)
-    logger.log(`Safe filename: "${safeTitle}"`)
+    let filename: string
+    if (customFilename) {
+      // Use custom filename if provided (ensure it's safe)
+      filename = getSafeFilename(customFilename)
+      logger.log(`Using custom filename: "${filename}"`)
+    } else {
+      // Use page title as filename
+      filename = getSafeFilename(pageTitle)
+      logger.log(`Using page title as filename: "${filename}"`)
+    }
 
     // Path for the Markdown file
-    const markdownFilePath = safePathJoin(destinationDir, `${safeTitle}.md`)
+    const markdownFilePath = safePathJoin(destinationDir, `${filename}.md`)
     logger.log(`Writing Markdown to file: ${markdownFilePath}`)
 
     // Write Markdown to file
@@ -109,7 +115,11 @@ export async function exportNotionPage(
 
     // If recursively exporting subpages
     if (recursive) {
-      await processSubpages(notion, blocks, destinationDir, safeTitle)
+      // Use custom filename for subdirectory if provided, otherwise use page title
+      const subdirName = customFilename
+        ? getSafeFilename(customFilename)
+        : getSafeFilename(pageTitle)
+      await processSubpages(notion, blocks, destinationDir, subdirName)
     }
 
     return {
@@ -160,20 +170,18 @@ async function processSubpages(
   }
 
   // Export subpages in parallel with concurrency limit
-  await processSubpagesWithConcurrency(notion, subpages, subpageDir)
+  await processSubpagesWithConcurrency(subpages, subpageDir)
 
   logger.log("All subpages processed successfully.")
 }
 
 /**
  * Process subpages with concurrency limit
- * @param notion Notion client
  * @param subpages List of subpages to process
  * @param subpageDir Destination directory for subpages
  * @param concurrencyLimit Maximum number of concurrent exports
  */
 async function processSubpagesWithConcurrency(
-  notion: Client,
   subpages: SubpageInfo[],
   subpageDir: string,
   concurrencyLimit = 3,
