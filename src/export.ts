@@ -74,10 +74,33 @@ export async function exportNotionPage(
     logger.log("Page information retrieved successfully.")
     logger.log(`Retrieved ${blocks.length} blocks from the page.`)
 
-    // Convert blocks to Markdown
+    // Get page title (from page properties)
+    const pageTitle = getPageTitle(page)
+    logger.log(`Page title: "${pageTitle}"`)
+
+    // Extract metadata from page object
+    const metadata = {
+      id: page.id,
+      created_time: page.created_time,
+      last_edited_time: page.last_edited_time,
+      url: page.url,
+    }
+
+    // Convert blocks to Markdown with metadata
     logger.log("Converting blocks to Markdown...")
-    const markdown = await convertBlocksToMarkdown(blocks, destinationDir)
+    const markdownContent = await convertBlocksToMarkdown(
+      blocks,
+      destinationDir,
+    )
     logger.log("Conversion to Markdown completed.")
+
+    // Create metadata JSON comment
+    const metadataComment = `<!-- ** GENERATED_BY_NOTION_EXPORTER **
+${JSON.stringify(metadata, null, 2)}
+-->`
+
+    // Combine metadata comment, title, and content
+    const markdown = `${metadataComment}\n\n# ${pageTitle}\n\n${markdownContent}`
 
     // Create destination directory if it doesn't exist
     logger.log(`Ensuring destination directory exists: ${destinationDir}`)
@@ -85,10 +108,6 @@ export async function exportNotionPage(
     if (dirCreated) {
       logger.log(`Created directory: ${destinationDir}`)
     }
-
-    // Get page title (from page properties)
-    const pageTitle = getPageTitle(page)
-    logger.log(`Page title: "${pageTitle}"`)
 
     // Generate a safe title for use in filenames
     let filename: string
@@ -107,7 +126,7 @@ export async function exportNotionPage(
     logger.log(`Writing Markdown to file: ${markdownFilePath}`)
 
     // Write Markdown to file
-    fs.writeFileSync(markdownFilePath, `# ${pageTitle}\n\n${markdown}`)
+    fs.writeFileSync(markdownFilePath, markdown)
 
     logger.log(
       `Successfully exported page "${pageTitle}" to ${markdownFilePath}`,
