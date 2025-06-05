@@ -173,3 +173,69 @@ export function safePathJoin(baseDir: string, relativePath: string): string {
     .replace(/^(\.\.(\/|\\|$))+/, "")
   return path.join(baseDir, normalizedPath)
 }
+
+/**
+ * Metadata structure for exported files
+ */
+export interface ExportedMetadata {
+  id: string
+  created_time: string
+  last_edited_time: string
+  url: string
+  archived?: boolean
+  in_trash?: boolean
+  public_url?: string | null
+}
+
+/**
+ * Extract metadata from an existing markdown file
+ * @param filePath Path to the markdown file
+ * @returns Metadata object or null if not found
+ */
+export function extractMetadataFromMarkdown(
+  filePath: string,
+): ExportedMetadata | null {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return null
+    }
+
+    const content = fs.readFileSync(filePath, "utf-8")
+
+    // Look for the metadata comment block
+    const metadataRegex =
+      /<!-- \*\* GENERATED_BY_NOTION_EXPORTER \*\*\n([\s\S]*?)\n-->/
+    const match = content.match(metadataRegex)
+
+    if (!match || !match[1]) {
+      return null
+    }
+
+    try {
+      return JSON.parse(match[1]) as ExportedMetadata
+    } catch (parseError) {
+      return null
+    }
+  } catch (error) {
+    return null
+  }
+}
+
+/**
+ * Compare two metadata objects to check if the page has been updated
+ * @param currentMetadata Current metadata from Notion
+ * @param existingMetadata Existing metadata from file
+ * @returns True if the page has been updated
+ */
+export function hasPageBeenUpdated(
+  currentMetadata: ExportedMetadata,
+  existingMetadata: ExportedMetadata | null,
+): boolean {
+  // If no existing metadata, consider it as updated
+  if (!existingMetadata) {
+    return true
+  }
+
+  // Compare last_edited_time to determine if update is needed
+  return currentMetadata.last_edited_time !== existingMetadata.last_edited_time
+}

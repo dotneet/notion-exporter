@@ -4,6 +4,7 @@
  */
 
 import { parseArgs } from "node:util"
+import { version } from "../package.json"
 import { exportNotionPage } from "./export"
 import { createLogger } from "./utils"
 
@@ -14,7 +15,7 @@ const logger = createLogger("CLI")
  * Display help message
  */
 function displayHelp() {
-  console.log("Notion to Markdown Exporter v0.1.1")
+  console.log(`Notion to Markdown Exporter v${version}`)
   console.log("\nUsage:")
   console.log(
     "  bunx @devneko/notion-exporter [options] <notion-page-id> <destination-dir>",
