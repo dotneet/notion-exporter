@@ -78,3 +78,7 @@ Requires `NOTION_TOKEN` environment variable for Notion API access.
 - Target: Node.js compatible
 - Format: ESM modules
 - Includes: TypeScript declarations and source maps
+
+## References
+
+  - [Notion API Reference](https://developers.notion.com/reference/intro)

@@ -14,9 +14,12 @@ import {
 } from "./notion"
 import type { ExportResult, NotionAPIError, SubpageInfo } from "./types"
 import {
+  type ExportedMetadata,
   createLogger,
   ensureDirectoryExists,
+  extractMetadataFromMarkdown,
   getSafeFilename,
+  hasPageBeenUpdated,
   safePathJoin,
 } from "./utils"
 
@@ -64,50 +67,14 @@ export async function exportNotionPage(
   })
 
   try {
-    // Get page information and blocks in parallel
-    logger.log(`Fetching page information and blocks for ${pageId}...`)
-    const [page, blocks] = await Promise.all([
-      getNotionPage(notion, pageId),
-      getNotionBlocks(notion, pageId),
-    ])
-
+    // Get page information first
+    logger.log(`Fetching page information for ${pageId}...`)
+    const page = await getNotionPage(notion, pageId)
     logger.log("Page information retrieved successfully.")
-    logger.log(`Retrieved ${blocks.length} blocks from the page.`)
 
     // Get page title (from page properties)
     const pageTitle = getPageTitle(page)
     logger.log(`Page title: "${pageTitle}"`)
-
-    // Extract metadata from page object
-    const metadata = {
-      id: page.id,
-      created_time: page.created_time,
-      last_edited_time: page.last_edited_time,
-      url: page.url,
-    }
-
-    // Convert blocks to Markdown with metadata
-    logger.log("Converting blocks to Markdown...")
-    const markdownContent = await convertBlocksToMarkdown(
-      blocks,
-      destinationDir,
-    )
-    logger.log("Conversion to Markdown completed.")
-
-    // Create metadata JSON comment
-    const metadataComment = `<!-- ** GENERATED_BY_NOTION_EXPORTER **
-${JSON.stringify(metadata, null, 2)}
--->`
-
-    // Combine metadata comment, title, and content
-    const markdown = `${metadataComment}\n\n# ${pageTitle}\n\n${markdownContent}`
-
-    // Create destination directory if it doesn't exist
-    logger.log(`Ensuring destination directory exists: ${destinationDir}`)
-    const dirCreated = ensureDirectoryExists(destinationDir)
-    if (dirCreated) {
-      logger.log(`Created directory: ${destinationDir}`)
-    }
 
     // Generate a safe title for use in filenames
     let filename: string
@@ -123,6 +90,66 @@ ${JSON.stringify(metadata, null, 2)}
 
     // Path for the Markdown file
     const markdownFilePath = safePathJoin(destinationDir, `${filename}.md`)
+
+    // Extract metadata from page object
+    const currentMetadata: ExportedMetadata = {
+      id: page.id,
+      created_time: page.created_time,
+      last_edited_time: page.last_edited_time,
+      url: page.url,
+      archived: page.archived,
+      in_trash: page.in_trash,
+      public_url: page.public_url,
+    }
+
+    // Check if file exists and extract existing metadata
+    const existingMetadata = extractMetadataFromMarkdown(markdownFilePath)
+
+    // Check if page has been updated
+    const needsUpdate = hasPageBeenUpdated(currentMetadata, existingMetadata)
+
+    if (!needsUpdate) {
+      logger.log(
+        `Page "${pageTitle}" has not been updated since last export. Skipping...`,
+      )
+      return {
+        success: true,
+        pageId,
+        pageTitle,
+        path: markdownFilePath,
+      }
+    }
+
+    logger.log(`Page "${pageTitle}" has been updated. Processing...`)
+
+    // Get blocks only if update is needed
+    logger.log(`Fetching blocks for ${pageId}...`)
+    const blocks = await getNotionBlocks(notion, pageId)
+    logger.log(`Retrieved ${blocks.length} blocks from the page.`)
+
+    // Convert blocks to Markdown with metadata
+    logger.log("Converting blocks to Markdown...")
+    const markdownContent = await convertBlocksToMarkdown(
+      blocks,
+      destinationDir,
+    )
+    logger.log("Conversion to Markdown completed.")
+
+    // Create metadata JSON comment
+    const metadataComment = `<!-- ** GENERATED_BY_NOTION_EXPORTER **
+${JSON.stringify(currentMetadata, null, 2)}
+-->`
+
+    // Combine metadata comment, title, and content
+    const markdown = `${metadataComment}\n\n# ${pageTitle}\n\n${markdownContent}`
+
+    // Create destination directory if it doesn't exist
+    logger.log(`Ensuring destination directory exists: ${destinationDir}`)
+    const dirCreated = ensureDirectoryExists(destinationDir)
+    if (dirCreated) {
+      logger.log(`Created directory: ${destinationDir}`)
+    }
+
     logger.log(`Writing Markdown to file: ${markdownFilePath}`)
 
     // Write Markdown to file

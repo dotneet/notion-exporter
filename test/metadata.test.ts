@@ -20,6 +20,9 @@ mock.module("@notionhq/client", () => {
           url: "https://www.notion.so/test-page-id",
           created_time: "2024-01-01T00:00:00.000Z",
           last_edited_time: "2024-01-02T00:00:00.000Z",
+          archived: false,
+          in_trash: false,
+          public_url: "https://notion.site/test-page-public",
           properties: {
             title: {
               type: "title",
@@ -73,6 +76,11 @@ describe("Metadata Export", () => {
     expect(content).toContain('"url": "https://www.notion.so/test-page-id"')
     expect(content).toContain('"created_time": "2024-01-01T00:00:00.000Z"')
     expect(content).toContain('"last_edited_time": "2024-01-02T00:00:00.000Z"')
+    expect(content).toContain('"archived": false')
+    expect(content).toContain('"in_trash": false')
+    expect(content).toContain(
+      '"public_url": "https://notion.site/test-page-public"',
+    )
     expect(content).toContain("-->")
 
     // Check that metadata is at the top
