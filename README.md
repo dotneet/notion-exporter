@@ -134,6 +134,64 @@ See [`.github/workflows/example.yml`](.github/workflows/example.yml) for a compl
 
 **Important:** Make sure to add your Notion token as a repository secret named `NOTION_TOKEN` in your GitHub repository settings.
 
+## Metadata Handling
+
+The exporter automatically handles Notion page metadata to enable smart export management and update detection.
+
+### Automatic Metadata Extraction
+
+When exporting pages, the tool automatically extracts and stores metadata including:
+
+- **Page ID**: Unique identifier for the Notion page
+- **Creation time**: When the page was originally created
+- **Last edited time**: When the page was last modified (used for update detection)
+- **URL**: Direct link to the Notion page
+- **Archive status**: Whether the page is archived
+- **Trash status**: Whether the page is in trash
+- **Public URL**: Public sharing URL if available
+
+### Metadata Storage Format
+
+Metadata is stored as JSON within HTML comments at the top of each exported markdown file:
+
+```markdown
+<!-- ** GENERATED_BY_NOTION_EXPORTER **
+{
+  "id": "page-id-here",
+  "created_time": "2024-01-01T00:00:00.000Z",
+  "last_edited_time": "2024-01-02T00:00:00.000Z",
+  "url": "https://www.notion.so/page-id",
+  "archived": false,
+  "in_trash": false,
+  "public_url": "https://notion.site/public-url"
+}
+-->
+
+# Page Title
+
+Content goes here...
+```
+
+### Smart Update Detection
+
+The exporter uses metadata to intelligently determine when pages need to be re-exported:
+
+- **Incremental exports**: Only re-exports pages that have been modified since the last export
+- **Performance optimization**: Skips unchanged pages to reduce API calls and processing time
+- **Timestamp comparison**: Compares `last_edited_time` from Notion API with stored metadata
+
+When running the exporter on previously exported content, you'll see messages like:
+```
+Page "Unchanged Document" has not been updated since last export. Skipping...
+```
+
+### Benefits
+
+- **Faster subsequent exports**: Only processes changed content
+- **Reduced API usage**: Minimizes Notion API calls for unchanged pages
+- **Traceability**: Full audit trail of when pages were created and modified
+- **Non-intrusive**: Metadata stored in HTML comments doesn't affect markdown rendering
+
 ## Testing
 
 The project includes a comprehensive test suite using Bun's built-in test runner. To run the tests:
