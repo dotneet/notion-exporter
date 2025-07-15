@@ -5,7 +5,7 @@
 
 import { parseArgs } from "node:util"
 import { version } from "../package.json"
-import { exportNotionPage } from "./export"
+import { exportNotionResource } from "./export"
 import { createLogger } from "./utils"
 
 // Create logger for this module
@@ -18,17 +18,19 @@ function displayHelp() {
   console.log(`Notion to Markdown Exporter v${version}`)
   console.log("\nUsage:")
   console.log(
-    "  bunx @devneko/notion-exporter [options] <notion-page-id> <destination-dir>",
+    "  bunx @devneko/notion-exporter [options] <notion-resource-id> <destination-dir>",
   )
   console.log("\nArguments:")
-  console.log("  <notion-page-id>      The ID of the Notion page to export")
   console.log(
-    "  <destination-dir>     Directory where the markdown file will be saved",
+    "  <notion-resource-id>  The ID of the Notion page or database to export",
+  )
+  console.log(
+    "  <destination-dir>     Directory where the markdown files will be saved",
   )
   console.log("\nOptions:")
   console.log("  --recursive, -r      Export child pages recursively")
   console.log(
-    "  --name, -n           Custom filename for the exported markdown file",
+    "  --name, -n           Custom filename for the exported markdown file (pages only)",
   )
   console.log("  --help, -h           Show this help message")
   console.log("  --version, -v        Show version number")
@@ -49,6 +51,13 @@ function displayHelp() {
   console.log("\n  # Export with custom filename")
   console.log(
     "  NOTION_TOKEN=your_token bunx @devneko/notion-exporter --name my-custom-name abc123def456 ./output",
+  )
+  console.log("\n  # Export a database")
+  console.log(
+    "  NOTION_TOKEN=your_token bunx @devneko/notion-exporter db123456789 ./output",
+  )
+  console.log(
+    "\nNote: Databases are exported to ./output/databases/<db-id>/ with metadata in _meta.md",
   )
 }
 
@@ -161,29 +170,61 @@ async function main() {
 
     // Execute export process
     logger.log("Initiating export process...")
-    const result = await exportNotionPage(
+    const result = await exportNotionResource(
       pageId,
       destinationDir,
       recursive,
       name,
     )
 
-    // Display export summary
-    console.log(`\n${"=".repeat(50)}`)
-    console.log("Export Summary:")
-    console.log(`- Status: ${result.success ? "✅ Success" : "❌ Failed"}`)
-    console.log(`- Page ID: ${result.pageId}`)
-    console.log(`- Page Title: ${result.pageTitle}`)
-    console.log(`- Output File: ${result.path}`)
-    console.log("=".repeat(50))
+    // Display export summary based on result type
+    if (Array.isArray(result)) {
+      // Database export result
+      const successCount = result.filter((r) => r.success).length
+      const totalCount = result.length
 
-    console.log("\n✨ Export completed successfully!")
-    console.log(`You can find your exported Markdown file at: ${result.path}`)
-
-    if (recursive) {
+      console.log(`\n${"=".repeat(50)}`)
+      console.log("Database Export Summary:")
       console.log(
-        "Subpages have been exported to the same directory structure.",
+        `- Status: ${successCount === totalCount ? "✅ All items exported successfully" : `⚠️  ${successCount}/${totalCount} items exported`}`,
       )
+      console.log(`- Total Items: ${totalCount}`)
+      console.log(`- Successful: ${successCount}`)
+      console.log(`- Failed: ${totalCount - successCount}`)
+      console.log(`- Output Directory: ${destinationDir}/databases/${pageId}/`)
+      console.log("=".repeat(50))
+
+      console.log("\n✨ Database export completed!")
+      console.log(
+        `Database metadata saved to: ${destinationDir}/databases/${pageId}/_meta.md`,
+      )
+      console.log(
+        `Database items saved to: ${destinationDir}/databases/${pageId}/`,
+      )
+
+      if (recursive) {
+        console.log(
+          "Subpages of database items have been exported to subdirectories.",
+        )
+      }
+    } else {
+      // Page export result
+      console.log(`\n${"=".repeat(50)}`)
+      console.log("Export Summary:")
+      console.log(`- Status: ${result.success ? "✅ Success" : "❌ Failed"}`)
+      console.log(`- Page ID: ${result.pageId}`)
+      console.log(`- Page Title: ${result.pageTitle}`)
+      console.log(`- Output File: ${result.path}`)
+      console.log("=".repeat(50))
+
+      console.log("\n✨ Export completed successfully!")
+      console.log(`You can find your exported Markdown file at: ${result.path}`)
+
+      if (recursive) {
+        console.log(
+          "Subpages have been exported to the same directory structure.",
+        )
+      }
     }
   } catch (error) {
     console.error(`\n${"=".repeat(50)}`)
