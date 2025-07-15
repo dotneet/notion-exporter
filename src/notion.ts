@@ -5,11 +5,18 @@
 import type { Client } from "@notionhq/client"
 import type {
   BlockObjectResponse,
+  DatabaseObjectResponse,
   ListBlockChildrenParameters,
   ListBlockChildrenResponse,
   PageObjectResponse,
+  QueryDatabaseParameters,
 } from "@notionhq/client/build/src/api-endpoints"
-import type { BlockWithChildren, NotionAPIError, SubpageInfo } from "./types"
+import type {
+  BlockWithChildren,
+  DatabaseMetadata,
+  NotionAPIError,
+  SubpageInfo,
+} from "./types"
 import { createLogger } from "./utils"
 
 // Create logger for this module
@@ -218,6 +225,32 @@ export async function getSubpages(
 }
 
 /**
+ * Extract child databases from block array
+ * @param notion Notion API client
+ * @param blocks Array of blocks
+ * @returns Array of child database info
+ */
+export async function getChildDatabases(
+  notion: Client,
+  blocks: BlockObjectResponse[],
+): Promise<SubpageInfo[]> {
+  logger.log(`Scanning for child databases in ${blocks.length} blocks...`)
+  const databases: SubpageInfo[] = []
+  // Scan blocks to find child_database type
+  for (const block of blocks) {
+    if (block.type === "child_database") {
+      logger.log(`Found child database: "${block.id}"`)
+      databases.push({
+        id: block.id,
+        title: `Database ${block.id}`, // Child databases don't have titles in the block
+      })
+    }
+  }
+  logger.log(`Total child databases found: ${databases.length}`)
+  return databases
+}
+
+/**
  * Get page title from page properties
  * @param page Notion page object
  * @returns Page title
@@ -237,6 +270,134 @@ export function getPageTitle(page: PageObjectResponse): string {
   }
 
   return "Untitled"
+}
+
+/**
+ * Check if a resource is a database
+ * @param notion Notion API client
+ * @param resourceId Resource ID
+ * @returns True if resource is a database
+ */
+export async function isDatabase(
+  notion: Client,
+  resourceId: string,
+): Promise<boolean> {
+  try {
+    logger.log(`Checking if ${resourceId} is a database...`)
+    await notion.databases.retrieve({ database_id: resourceId })
+    logger.log(`${resourceId} is a database`)
+    return true
+  } catch (error) {
+    // If it fails with a specific error, it might be a page
+    const apiError = error as { code?: string }
+    if (
+      apiError.code === "object_not_found" ||
+      apiError.code === "validation_error"
+    ) {
+      logger.log(`${resourceId} is not a database`)
+      return false
+    }
+    // Re-throw other errors
+    throw error
+  }
+}
+
+/**
+ * Get database information
+ * @param notion Notion API client
+ * @param databaseId Database ID
+ * @returns Database metadata
+ */
+export async function getDatabase(
+  notion: Client,
+  databaseId: string,
+): Promise<DatabaseMetadata> {
+  try {
+    logger.log(`Retrieving database with ID ${databaseId}...`)
+    const response = (await notion.databases.retrieve({
+      database_id: databaseId,
+    })) as DatabaseObjectResponse
+
+    const title = response.title.map((t) => t.plain_text).join("")
+    const description =
+      response.description?.map((d) => d.plain_text).join("") || undefined
+
+    logger.log(`Successfully retrieved database: ${title}`)
+
+    const metadata: DatabaseMetadata = {
+      id: response.id,
+      title: title || "Untitled Database",
+      created_time: response.created_time,
+      last_edited_time: response.last_edited_time,
+      properties: response.properties,
+    }
+
+    if (description) {
+      metadata.description = description
+    }
+
+    return metadata
+  } catch (error) {
+    logger.error(`Failed to retrieve database ${databaseId}`)
+    const apiError = handleNotionError(error, databaseId)
+    throw apiError
+  }
+}
+
+/**
+ * Query database pages
+ * @param notion Notion API client
+ * @param databaseId Database ID
+ * @returns Array of pages in the database
+ */
+export async function queryDatabase(
+  notion: Client,
+  databaseId: string,
+): Promise<PageObjectResponse[]> {
+  const pages: PageObjectResponse[] = []
+  let cursor: string | undefined
+  let pageCount = 0
+
+  try {
+    logger.log(`Querying database ${databaseId}...`)
+
+    // Get all pages using pagination
+    do {
+      pageCount++
+      logger.log(`Fetching page ${pageCount} of database items...`)
+
+      const params: QueryDatabaseParameters = {
+        database_id: databaseId,
+      }
+
+      if (cursor) {
+        params.start_cursor = cursor
+      }
+
+      const response = await notion.databases.query(params)
+
+      // Add retrieved pages
+      const newPages = response.results.filter(
+        (result): result is PageObjectResponse => result.object === "page",
+      )
+      pages.push(...newPages)
+      logger.log(`Retrieved ${newPages.length} pages (total: ${pages.length})`)
+
+      // Check if there's a next page
+      cursor = response.next_cursor ?? undefined
+
+      if (cursor) {
+        logger.log("More pages available, continuing to next page...")
+      }
+    } while (cursor)
+
+    logger.log(`Successfully retrieved ${pages.length} pages from database`)
+    return pages
+  } catch (error) {
+    logger.error(`Failed to query database ${databaseId}`)
+    const apiError = handleNotionError(error, databaseId)
+    throw apiError
+  }
 }
 
 /**

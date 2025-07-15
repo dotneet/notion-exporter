@@ -7,12 +7,19 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import { Client } from "@notionhq/client"
 import type { BlockObjectResponse } from "@notionhq/client/build/src/api-endpoints"
-import type { BlockWithChildren, NotionRichText } from "./types"
+import type {
+  BlockWithChildren,
+  BlockWithDatabaseContent,
+  DatabaseContent,
+  DatabaseItem,
+  NotionRichText,
+} from "./types"
 import {
   createLogger,
   downloadImage,
   ensureDirectoryExists,
   getImageExtension,
+  getSafeFilename,
 } from "./utils"
 
 // Create logger for this module
@@ -134,9 +141,58 @@ async function convertBlockToMarkdown(
     },
     child_database: () => {
       if (block.type === "child_database") {
-        return `[Database: ${
-          block.id
-        }](https://www.notion.so/${block.id.replace(/-/g, "")})`
+        const enrichedBlock = block as BlockWithDatabaseContent
+        const dbContent = enrichedBlock.database_content
+
+        // If we don't have enriched content, fall back to link
+        if (!dbContent || !dbContent.items || dbContent.items.length === 0) {
+          return `[Database: ${
+            block.id
+          }](https://www.notion.so/${block.id.replace(/-/g, "")})`
+        }
+
+        // Find title property (the one with type "title")
+        let titleProp = ""
+        for (const [key, prop] of Object.entries(dbContent.properties)) {
+          if (prop.type === "title") {
+            titleProp = key
+            break
+          }
+        }
+
+        // Reorder properties to put title first
+        const properties = Object.keys(dbContent.properties)
+        const orderedProperties = titleProp
+          ? [titleProp, ...properties.filter((p) => p !== titleProp)]
+          : properties
+
+        // Create table header with property names
+        const header = `| ${orderedProperties.map((prop) => dbContent.properties[prop].name).join(" | ")} |`
+        const separator = `| ${orderedProperties.map(() => "---").join(" | ")} |`
+
+        // Create table rows
+        const rows = dbContent.items
+          .map((item: DatabaseItem) => {
+            const values = orderedProperties.map((prop, index) => {
+              const value = item[prop]
+
+              // Special handling for title column - make it a link
+              if (index === 0 && titleProp && prop === titleProp) {
+                const titleValue = value || "Untitled"
+                const filename = getSafeFilename(titleValue)
+                return `[${titleValue}](databases/${block.id}/${filename}.md)`
+              }
+
+              if (value === undefined || value === null) return ""
+              if (typeof value === "boolean") return value ? "✓" : "✗"
+              if (typeof value === "object") return JSON.stringify(value)
+              return String(value).replace(/\|/g, "\\|") // Escape pipes in content
+            })
+            return `| ${values.join(" | ")} |`
+          })
+          .join("\n")
+
+        return `${header}\n${separator}\n${rows}`
       }
       return ""
     },

@@ -4,15 +4,31 @@
 
 import * as fs from "node:fs"
 import { Client } from "@notionhq/client"
-import type { BlockObjectResponse } from "@notionhq/client/build/src/api-endpoints"
+import type {
+  BlockObjectResponse,
+  PageObjectResponse,
+} from "@notionhq/client/build/src/api-endpoints"
 import { convertBlocksToMarkdown } from "./markdown"
 import {
+  getChildDatabases,
+  getDatabase,
   getNotionBlocks,
   getNotionPage,
   getPageTitle,
   getSubpages,
+  isDatabase,
+  queryDatabase,
 } from "./notion"
-import type { ExportResult, NotionAPIError, SubpageInfo } from "./types"
+import type {
+  BlockWithChildrenProperty,
+  BlockWithDatabaseContent,
+  DatabaseItem,
+  DatabaseItemExportResult,
+  DatabaseMetadata,
+  ExportResult,
+  NotionAPIError,
+  SubpageInfo,
+} from "./types"
 import {
   type ExportedMetadata,
   createLogger,
@@ -35,6 +51,86 @@ class NotionTokenError extends Error {
   ) {
     super(message)
     this.name = "NotionTokenError"
+  }
+}
+
+/**
+ * Enrich child database blocks with their content
+ * @param notion Notion client
+ * @param blocks Array of blocks to process
+ */
+async function enrichChildDatabaseBlocks(
+  notion: Client,
+  blocks: BlockObjectResponse[],
+): Promise<void> {
+  for (const block of blocks) {
+    if (block.type === "child_database") {
+      try {
+        logger.log(`Enriching child database block: ${block.id}`)
+
+        // Get database info
+        const database = await getDatabase(notion, block.id)
+
+        // Query database items
+        const items = await queryDatabase(notion, block.id)
+
+        // Add the data to the block
+        const enrichedBlock = block as BlockWithDatabaseContent
+        enrichedBlock.database_content = {
+          title: database.title,
+          properties: database.properties,
+          items: items.map((item) => {
+            const itemData: DatabaseItem = {
+              id: item.id,
+              url: item.url,
+            }
+
+            // Extract property values
+            for (const [key, value] of Object.entries(item.properties)) {
+              if (value.type === "title") {
+                itemData[key] = value.title.map((t) => t.plain_text).join("")
+              } else if (value.type === "rich_text") {
+                itemData[key] = value.rich_text
+                  .map((t) => t.plain_text)
+                  .join("")
+              } else if (value.type === "number") {
+                itemData[key] = value.number
+              } else if (value.type === "select") {
+                itemData[key] = value.select?.name
+              } else if (value.type === "multi_select") {
+                itemData[key] = value.multi_select.map((s) => s.name).join(", ")
+              } else if (value.type === "date") {
+                itemData[key] = value.date?.start
+              } else if (value.type === "checkbox") {
+                itemData[key] = value.checkbox
+              } else if (value.type === "url") {
+                itemData[key] = value.url
+              } else if (value.type === "email") {
+                itemData[key] = value.email
+              } else if (value.type === "phone_number") {
+                itemData[key] = value.phone_number
+              } else if (value.type === "status") {
+                itemData[key] = value.status?.name
+              }
+            }
+
+            return itemData
+          }),
+        }
+
+        logger.log(`Enriched database with ${items.length} items`)
+      } catch (error) {
+        logger.error(`Failed to enrich child database ${block.id}: ${error}`)
+      }
+    }
+
+    // Process child blocks recursively
+    if (block.has_children) {
+      const blockWithChildren = block as BlockWithChildrenProperty
+      if (blockWithChildren.children) {
+        await enrichChildDatabaseBlocks(notion, blockWithChildren.children)
+      }
+    }
   }
 }
 
@@ -129,6 +225,8 @@ export async function exportNotionPage(
 
     // Convert blocks to Markdown with metadata
     logger.log("Converting blocks to Markdown...")
+    // Enrich child database blocks with their content
+    await enrichChildDatabaseBlocks(notion, blocks)
     const markdownContent = await convertBlocksToMarkdown(
       blocks,
       destinationDir,
@@ -159,13 +257,18 @@ ${JSON.stringify(currentMetadata, null, 2)}
       `Successfully exported page "${pageTitle}" to ${markdownFilePath}`,
     )
 
-    // If recursively exporting subpages
+    // If recursively exporting subpages and child databases
     if (recursive) {
       // Use custom filename for subdirectory if provided, otherwise use page title
       const subdirName = customFilename
         ? getSafeFilename(customFilename)
         : getSafeFilename(pageTitle)
-      await processSubpages(notion, blocks, destinationDir, subdirName)
+      await processSubpagesAndDatabases(
+        notion,
+        blocks,
+        destinationDir,
+        subdirName,
+      )
     }
 
     return {
@@ -181,19 +284,21 @@ ${JSON.stringify(currentMetadata, null, 2)}
 }
 
 /**
- * Process subpages recursively
+ * Process subpages and child databases recursively
  * @param notion Notion client
  * @param blocks Blocks from parent page
  * @param destinationDir Parent destination directory
  * @param parentTitle Safe parent title for subdirectory
  */
-async function processSubpages(
+async function processSubpagesAndDatabases(
   notion: Client,
   blocks: BlockObjectResponse[],
   destinationDir: string,
   parentTitle: string,
 ): Promise<void> {
-  logger.log("Recursive option enabled. Processing subpages...")
+  logger.log(
+    "Recursive option enabled. Processing subpages and child databases...",
+  )
 
   // Directory for subpages
   const subpageDir = safePathJoin(destinationDir, parentTitle)
@@ -204,21 +309,46 @@ async function processSubpages(
   const subpages = await getSubpages(notion, blocks)
   logger.log(`Found ${subpages.length} subpages.`)
 
-  if (subpages.length === 0) {
-    logger.log("No subpages to process.")
+  // Get child databases
+  logger.log("Fetching child databases...")
+  const childDatabases = await getChildDatabases(notion, blocks)
+  logger.log(`Found ${childDatabases.length} child databases.`)
+
+  if (subpages.length === 0 && childDatabases.length === 0) {
+    logger.log("No subpages or child databases to process.")
     return
   }
 
   // Create subpage directory if it doesn't exist
-  const subDirCreated = ensureDirectoryExists(subpageDir)
-  if (subDirCreated) {
-    logger.log(`Created subpage directory: ${subpageDir}`)
+  if (subpages.length > 0) {
+    const subDirCreated = ensureDirectoryExists(subpageDir)
+    if (subDirCreated) {
+      logger.log(`Created subpage directory: ${subpageDir}`)
+    }
+
+    // Export subpages in parallel with concurrency limit
+    await processSubpagesWithConcurrency(subpages, subpageDir)
+    logger.log("All subpages processed successfully.")
   }
 
-  // Export subpages in parallel with concurrency limit
-  await processSubpagesWithConcurrency(subpages, subpageDir)
+  // Process child databases
+  if (childDatabases.length > 0) {
+    logger.log("Processing child databases...")
 
-  logger.log("All subpages processed successfully.")
+    for (const childDb of childDatabases) {
+      try {
+        logger.log(`Exporting child database ${childDb.id}...`)
+        await exportNotionDatabase(childDb.id, destinationDir, true)
+        logger.log(`Successfully exported child database ${childDb.id}`)
+      } catch (error) {
+        logger.error(
+          `Failed to export child database ${childDb.id}: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+    }
+
+    logger.log("All child databases processed.")
+  }
 }
 
 /**
@@ -312,5 +442,358 @@ function handleExportError(error: unknown, pageId: string): void {
     }
   } else {
     logger.error(`Unknown error: ${String(error)}`)
+  }
+}
+
+/**
+ * Export a Notion database
+ * @param databaseId ID of the Notion database to export
+ * @param destinationDir Destination directory
+ * @param recursive Whether to recursively export pages (including their subpages)
+ * @returns Array of export results for all database items
+ */
+export async function exportNotionDatabase(
+  databaseId: string,
+  destinationDir: string,
+  recursive = false,
+): Promise<DatabaseItemExportResult[]> {
+  logger.log(`Starting export of Notion database ${databaseId}...`)
+
+  // Check Notion API token
+  const notionToken = process.env.NOTION_TOKEN
+  if (!notionToken) {
+    throw new NotionTokenError()
+  }
+
+  // Initialize Notion API client
+  logger.log("Initializing Notion API client...")
+  const notion = new Client({
+    auth: notionToken,
+  })
+
+  try {
+    // Get database information
+    logger.log(`Fetching database information for ${databaseId}...`)
+    const database = await getDatabase(notion, databaseId)
+    logger.log(`Database title: "${database.title}"`)
+
+    // Create database directory
+    const databaseDir = safePathJoin(
+      destinationDir,
+      safePathJoin("databases", databaseId),
+    )
+    logger.log(`Database directory: ${databaseDir}`)
+    const dirCreated = ensureDirectoryExists(databaseDir)
+    if (dirCreated) {
+      logger.log(`Created database directory: ${databaseDir}`)
+    }
+
+    // Export database metadata
+    await exportDatabaseMetadata(database, databaseDir)
+
+    // Query all pages in the database
+    logger.log("Querying pages in database...")
+    const pages = await queryDatabase(notion, databaseId)
+    logger.log(`Found ${pages.length} pages in database`)
+
+    // Export all pages
+    const results: DatabaseItemExportResult[] = []
+    const total = pages.length
+
+    // Process pages with concurrency limit
+    const concurrencyLimit = 3
+    const queue = [...pages]
+    const inProgress: Promise<DatabaseItemExportResult>[] = []
+
+    while (queue.length > 0 || inProgress.length > 0) {
+      // Fill up to concurrency limit
+      while (queue.length > 0 && inProgress.length < concurrencyLimit) {
+        const page = queue.shift()
+        if (!page) continue
+
+        const currentIndex = results.length + inProgress.length
+        const pageTitle = getPageTitle(page)
+        logger.log(
+          `Processing database item ${currentIndex + 1}/${total}: ${pageTitle} (${page.id})`,
+        )
+
+        const exportPromise = exportDatabaseItem(
+          notion,
+          page,
+          databaseDir,
+          recursive,
+        )
+          .then((result) => {
+            logger.log(`Completed database item: ${pageTitle}`)
+            return result
+          })
+          .catch((error) => {
+            logger.error(
+              `Failed to export database item ${pageTitle}: ${error.message}`,
+            )
+            return {
+              success: false,
+              pageId: page.id,
+              pageTitle,
+              path: "",
+              metadata: {},
+            }
+          })
+
+        inProgress.push(exportPromise)
+      }
+
+      // Wait for at least one promise to complete
+      if (inProgress.length > 0) {
+        const completedResult = await Promise.race(inProgress)
+        results.push(completedResult)
+
+        // Remove the completed promise
+        const index = inProgress.findIndex((p) => p.then(() => completedResult))
+        if (index !== -1) {
+          inProgress.splice(index, 1)
+        }
+      }
+    }
+
+    const successCount = results.filter((r) => r.success).length
+    logger.log(`Successfully exported ${successCount}/${total} database items`)
+
+    return results
+  } catch (error) {
+    handleExportError(error, databaseId)
+    throw error
+  }
+}
+
+/**
+ * Export database metadata to _meta.md
+ * @param database Database metadata
+ * @param databaseDir Database directory
+ */
+async function exportDatabaseMetadata(
+  database: DatabaseMetadata,
+  databaseDir: string,
+): Promise<void> {
+  logger.log("Exporting database metadata...")
+
+  const metadataPath = safePathJoin(databaseDir, "_meta.md")
+
+  // Format properties for markdown
+  const propertiesMarkdown = Object.entries(database.properties)
+    .map(([key, prop]) => `- **${prop.name}** (${prop.type})`)
+    .join("\n")
+
+  const metadataContent = `# ${database.title}
+
+${database.description || "No description provided."}
+
+## Database Information
+
+- **ID**: ${database.id}
+- **Created**: ${new Date(database.created_time).toLocaleString()}
+- **Last Edited**: ${new Date(database.last_edited_time).toLocaleString()}
+
+## Properties
+
+${propertiesMarkdown}
+
+---
+
+*This file contains metadata for the Notion database export.*
+`
+
+  fs.writeFileSync(metadataPath, metadataContent)
+  logger.log(`Database metadata written to ${metadataPath}`)
+}
+
+/**
+ * Export a single database item (page)
+ * @param notion Notion client
+ * @param page Page object from database
+ * @param databaseDir Database directory
+ * @param recursive Whether to export subpages
+ * @returns Export result for the database item
+ */
+async function exportDatabaseItem(
+  notion: Client,
+  page: PageObjectResponse,
+  databaseDir: string,
+  recursive: boolean,
+): Promise<DatabaseItemExportResult> {
+  try {
+    // Get page title
+    const pageTitle = getPageTitle(page)
+    const filename = getSafeFilename(pageTitle)
+    const markdownFilePath = safePathJoin(databaseDir, `${filename}.md`)
+
+    // Extract metadata from page object
+    const currentMetadata: ExportedMetadata = {
+      id: page.id,
+      created_time: page.created_time,
+      last_edited_time: page.last_edited_time,
+      url: page.url,
+      archived: page.archived,
+      in_trash: page.in_trash,
+      public_url: page.public_url,
+    }
+
+    // Extract property values as metadata
+    const propertyMetadata: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(page.properties)) {
+      if (value.type === "title") {
+        propertyMetadata[key] = value.title.map((t) => t.plain_text).join("")
+      } else if (value.type === "rich_text") {
+        propertyMetadata[key] = value.rich_text
+          .map((t) => t.plain_text)
+          .join("")
+      } else if (value.type === "number") {
+        propertyMetadata[key] = value.number
+      } else if (value.type === "select") {
+        propertyMetadata[key] = value.select?.name
+      } else if (value.type === "multi_select") {
+        propertyMetadata[key] = value.multi_select.map((s) => s.name)
+      } else if (value.type === "date") {
+        propertyMetadata[key] = value.date?.start
+      } else if (value.type === "checkbox") {
+        propertyMetadata[key] = value.checkbox
+      } else if (value.type === "url") {
+        propertyMetadata[key] = value.url
+      } else if (value.type === "email") {
+        propertyMetadata[key] = value.email
+      } else if (value.type === "phone_number") {
+        propertyMetadata[key] = value.phone_number
+      } else if (value.type === "status") {
+        propertyMetadata[key] = value.status?.name
+      }
+    }
+
+    // Check if file exists and extract existing metadata
+    const existingMetadata = extractMetadataFromMarkdown(markdownFilePath)
+
+    // Check if page has been updated
+    const needsUpdate = hasPageBeenUpdated(currentMetadata, existingMetadata)
+
+    if (!needsUpdate) {
+      logger.log(
+        `Database item "${pageTitle}" has not been updated since last export. Skipping...`,
+      )
+      return {
+        success: true,
+        pageId: page.id,
+        pageTitle,
+        path: markdownFilePath,
+        metadata: propertyMetadata,
+      }
+    }
+
+    logger.log(`Database item "${pageTitle}" has been updated. Processing...`)
+
+    // Get blocks
+    logger.log(`Fetching blocks for database item ${page.id}...`)
+    const blocks = await getNotionBlocks(notion, page.id)
+    logger.log(`Retrieved ${blocks.length} blocks.`)
+
+    // Convert blocks to Markdown
+    logger.log("Converting blocks to Markdown...")
+    const markdownContent = await convertBlocksToMarkdown(blocks, databaseDir)
+    logger.log("Conversion to Markdown completed.")
+
+    // Create metadata JSON comment
+    const fullMetadata = {
+      ...currentMetadata,
+      properties: propertyMetadata,
+    }
+    const metadataComment = `<!-- ** GENERATED_BY_NOTION_EXPORTER **
+${JSON.stringify(fullMetadata, null, 2)}
+-->`
+
+    // Format properties for display
+    const propertiesDisplay = Object.entries(propertyMetadata)
+      .filter(
+        ([key, value]) => value !== null && value !== undefined && value !== "",
+      )
+      .map(([key, value]) => {
+        if (Array.isArray(value)) {
+          return `**${key}**: ${value.join(", ")}`
+        }
+        return `**${key}**: ${value}`
+      })
+      .join(" | ")
+
+    // Combine metadata comment, title, properties, and content
+    const markdown = `${metadataComment}\n\n# ${pageTitle}\n\n${propertiesDisplay ? `${propertiesDisplay}\n\n---\n\n` : ""}${markdownContent}`
+
+    // Write Markdown to file
+    logger.log(`Writing Markdown to file: ${markdownFilePath}`)
+    fs.writeFileSync(markdownFilePath, markdown)
+    logger.log(
+      `Successfully exported database item "${pageTitle}" to ${markdownFilePath}`,
+    )
+
+    // If recursively exporting subpages
+    if (recursive) {
+      const subdirName = getSafeFilename(pageTitle)
+      await processSubpagesAndDatabases(notion, blocks, databaseDir, subdirName)
+    }
+
+    return {
+      success: true,
+      pageId: page.id,
+      pageTitle,
+      path: markdownFilePath,
+      metadata: propertyMetadata,
+    }
+  } catch (error) {
+    handleExportError(error, page.id)
+    throw error
+  }
+}
+
+/**
+ * Export a Notion resource (page or database)
+ * @param resourceId ID of the Notion resource to export
+ * @param destinationDir Destination directory
+ * @param recursive Whether to recursively export
+ * @param customFilename Optional custom filename (only for pages)
+ * @returns Export result
+ */
+export async function exportNotionResource(
+  resourceId: string,
+  destinationDir: string,
+  recursive = false,
+  customFilename?: string,
+): Promise<ExportResult | DatabaseItemExportResult[]> {
+  logger.log(`Checking resource type for ${resourceId}...`)
+
+  // Check Notion API token
+  const notionToken = process.env.NOTION_TOKEN
+  if (!notionToken) {
+    throw new NotionTokenError()
+  }
+
+  // Initialize Notion API client
+  const notion = new Client({
+    auth: notionToken,
+  })
+
+  try {
+    // Check if resource is a database
+    const isDb = await isDatabase(notion, resourceId)
+
+    if (isDb) {
+      logger.log(`Resource ${resourceId} is a database`)
+      return await exportNotionDatabase(resourceId, destinationDir, recursive)
+    }
+    logger.log(`Resource ${resourceId} is a page`)
+    return await exportNotionPage(
+      resourceId,
+      destinationDir,
+      recursive,
+      customFilename,
+    )
+  } catch (error) {
+    handleExportError(error, resourceId)
+    throw error
   }
 }

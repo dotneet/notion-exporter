@@ -80,3 +80,72 @@ export interface ImageDownloadResult {
   originalUrl: string
   error?: Error
 }
+
+/**
+ * Database metadata
+ */
+export interface DatabaseMetadata {
+  id: string
+  title: string
+  created_time: string
+  last_edited_time: string
+  description?: string
+  properties: Record<
+    string,
+    {
+      type: string
+      name: string
+      [key: string]: unknown
+    }
+  >
+}
+
+/**
+ * Database item result
+ */
+export interface DatabaseItemExportResult {
+  success: boolean
+  pageId: string
+  pageTitle: string
+  path: string
+  metadata: Record<string, unknown>
+}
+
+/**
+ * Database content for embedded display
+ */
+export interface DatabaseContent {
+  title: string
+  properties: Record<
+    string,
+    {
+      type: string
+      name: string
+      [key: string]: unknown
+    }
+  >
+  items: DatabaseItem[]
+}
+
+/**
+ * Database item data
+ */
+export interface DatabaseItem {
+  id: string
+  url: string
+  [key: string]: unknown
+}
+
+/**
+ * Block with database content
+ */
+export interface BlockWithDatabaseContent extends BlockObjectResponse {
+  database_content?: DatabaseContent
+}
+
+/**
+ * Block with children property
+ */
+export interface BlockWithChildrenProperty extends BlockObjectResponse {
+  children?: BlockObjectResponse[]
+}
