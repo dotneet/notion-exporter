@@ -479,19 +479,19 @@ export async function exportNotionDatabase(
     const database = await getDatabase(notion, databaseId)
     logger.log(`Database title: "${database.title}"`)
 
-    // Create database directory
-    const databaseDir = safePathJoin(
-      destinationDir,
-      safePathJoin("databases", databaseId),
-    )
-    logger.log(`Database directory: ${databaseDir}`)
-    const dirCreated = ensureDirectoryExists(databaseDir)
+    // Create databases directory
+    const databasesDir = safePathJoin(destinationDir, "databases")
+    const dirCreated = ensureDirectoryExists(databasesDir)
     if (dirCreated) {
-      logger.log(`Created database directory: ${databaseDir}`)
+      logger.log(`Created databases directory: ${databasesDir}`)
     }
 
-    // Export database metadata
-    await exportDatabaseMetadata(database, databaseDir)
+    // Create database-specific directory for items
+    const databaseDir = safePathJoin(databasesDir, databaseId)
+    const dbDirCreated = ensureDirectoryExists(databaseDir)
+    if (dbDirCreated) {
+      logger.log(`Created database directory: ${databaseDir}`)
+    }
 
     // Query all pages in the database
     logger.log("Querying pages in database...")
@@ -561,6 +561,9 @@ export async function exportNotionDatabase(
     const successCount = results.filter((r) => r.success).length
     logger.log(`Successfully exported ${successCount}/${total} database items`)
 
+    // Create database TOC file
+    await createDatabaseTOC(database, results, databasesDir, databaseId)
+
     return results
   } catch (error) {
     handleExportError(error, databaseId)
@@ -569,24 +572,53 @@ export async function exportNotionDatabase(
 }
 
 /**
- * Export database metadata to _meta.md
+ * Create database table of contents file with metadata
  * @param database Database metadata
- * @param databaseDir Database directory
+ * @param results Export results for database items
+ * @param databasesDir Databases directory
+ * @param databaseId Database ID
  */
-async function exportDatabaseMetadata(
+async function createDatabaseTOC(
   database: DatabaseMetadata,
-  databaseDir: string,
+  results: DatabaseItemExportResult[],
+  databasesDir: string,
+  databaseId: string,
 ): Promise<void> {
-  logger.log("Exporting database metadata...")
+  logger.log("Creating database table of contents...")
 
-  const metadataPath = safePathJoin(databaseDir, "_meta.md")
+  const safeTitle = getSafeFilename(database.title)
+  const tocPath = safePathJoin(databasesDir, `${databaseId}_${safeTitle}.md`)
+
+  // Create metadata JSON comment
+  const currentMetadata = {
+    id: database.id,
+    created_time: database.created_time,
+    last_edited_time: database.last_edited_time,
+    title: database.title,
+    description: database.description,
+    properties: database.properties,
+  }
+  const metadataComment = `<!-- ** GENERATED_BY_NOTION_EXPORTER **
+${JSON.stringify(currentMetadata, null, 2)}
+-->`
 
   // Format properties for markdown
   const propertiesMarkdown = Object.entries(database.properties)
-    .map(([key, prop]) => `- **${prop.name}** (${prop.type})`)
+    .map(([, prop]) => `- **${prop.name}** (${prop.type})`)
     .join("\n")
 
-  const metadataContent = `# ${database.title}
+  // Create table of contents from successful exports
+  const successfulResults = results.filter((r) => r.success)
+  const tocItems = successfulResults
+    .map((result) => {
+      const relativePath = `./${databaseId}/${result.pageId}.md`
+      return `- [${result.pageTitle}](${relativePath})`
+    })
+    .join("\n")
+
+  const tocContent = `${metadataComment}
+
+# ${database.title}
 
 ${database.description || "No description provided."}
 
@@ -595,18 +627,23 @@ ${database.description || "No description provided."}
 - **ID**: ${database.id}
 - **Created**: ${new Date(database.created_time).toLocaleString()}
 - **Last Edited**: ${new Date(database.last_edited_time).toLocaleString()}
+- **Total Items**: ${successfulResults.length}
 
 ## Properties
 
 ${propertiesMarkdown}
 
+## Table of Contents
+
+${tocItems || "No items exported."}
+
 ---
 
-*This file contains metadata for the Notion database export.*
+*This file contains the table of contents and metadata for the Notion database export.*
 `
 
-  fs.writeFileSync(metadataPath, metadataContent)
-  logger.log(`Database metadata written to ${metadataPath}`)
+  fs.writeFileSync(tocPath, tocContent)
+  logger.log(`Database table of contents written to ${tocPath}`)
 }
 
 /**
@@ -626,8 +663,7 @@ async function exportDatabaseItem(
   try {
     // Get page title
     const pageTitle = getPageTitle(page)
-    const filename = getSafeFilename(pageTitle)
-    const markdownFilePath = safePathJoin(databaseDir, `${filename}.md`)
+    const markdownFilePath = safePathJoin(databaseDir, `${page.id}.md`)
 
     // Extract metadata from page object
     const currentMetadata: ExportedMetadata = {
@@ -713,7 +749,7 @@ ${JSON.stringify(fullMetadata, null, 2)}
     // Format properties for display
     const propertiesDisplay = Object.entries(propertyMetadata)
       .filter(
-        ([key, value]) => value !== null && value !== undefined && value !== "",
+        ([, value]) => value !== null && value !== undefined && value !== "",
       )
       .map(([key, value]) => {
         if (Array.isArray(value)) {
