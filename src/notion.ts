@@ -174,14 +174,23 @@ async function processNestedBlocks(
           block.children = childBlocks
 
           logger.log(
-            `Added ${childBlocks.length} child blocks to ${block.type} block`,
+            `Added ${childBlocks.length} child blocks to ${block.type} block (${block.id})`,
           )
         } catch (error) {
-          logger.error(
-            `Failed to retrieve child blocks for ${block.id}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          )
+          // Special handling for toggle blocks - add more specific logging
+          if (block.type === "toggle") {
+            logger.error(
+              `⚠️  TOGGLE BLOCK FAILED: Failed to retrieve child blocks for toggle ${block.id}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            )
+          } else {
+            logger.error(
+              `Failed to retrieve child blocks for ${block.id} (type: ${block.type}): ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            )
+          }
           // Continue with other blocks even if one fails
           block.children = []
         }
