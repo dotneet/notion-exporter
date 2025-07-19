@@ -32,6 +32,9 @@ function displayHelp() {
   console.log(
     "  --name, -n           Custom filename for the exported markdown file (pages only)",
   )
+  console.log(
+    "  --query, -q          Query JSON for database filtering (databases only)",
+  )
   console.log("  --help, -h           Show this help message")
   console.log("  --version, -v        Show version number")
   console.log("\nEnvironment Variables:")
@@ -56,6 +59,10 @@ function displayHelp() {
   console.log(
     "  NOTION_TOKEN=your_token bunx @devneko/notion-exporter db123456789 ./output",
   )
+  console.log("\n  # Export a database with query filter")
+  console.log(
+    '  NOTION_TOKEN=your_token bunx @devneko/notion-exporter --query \'{"filter":{"property":"Status","status":{"equals":"Done"}}}\' db123456789 ./output',
+  )
   console.log(
     "\nNote: Databases are exported to ./output/databases/<db-id>/ with metadata in _meta.md",
   )
@@ -77,6 +84,10 @@ function parseArguments() {
       name: {
         type: "string",
         short: "n",
+      },
+      query: {
+        type: "string",
+        short: "q",
       },
       help: {
         type: "boolean",
@@ -114,8 +125,9 @@ function parseArguments() {
   const destinationDir = positionals[1]
   const recursive = values.recursive || false
   const name = values.name
+  const query = values.query
 
-  return { recursive, pageId, destinationDir, name }
+  return { recursive, pageId, destinationDir, name, query }
 }
 
 /**
@@ -150,7 +162,7 @@ function displayTroubleshootingTips() {
 async function main() {
   try {
     // Parse command line arguments
-    const { recursive, pageId, destinationDir, name } = parseArguments()
+    const { recursive, pageId, destinationDir, name, query } = parseArguments()
 
     // Validate environment
     validateEnvironment()
@@ -166,6 +178,9 @@ async function main() {
     if (name) {
       console.log(`- Custom Filename: ${name}`)
     }
+    if (query) {
+      console.log(`- Database Query: ${query}`)
+    }
     console.log("=".repeat(50))
 
     // Execute export process
@@ -175,6 +190,7 @@ async function main() {
       destinationDir,
       recursive,
       name,
+      query,
     )
 
     // Display export summary based on result type

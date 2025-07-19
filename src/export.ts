@@ -25,6 +25,7 @@ import type {
   DatabaseItem,
   DatabaseItemExportResult,
   DatabaseMetadata,
+  DatabaseQuery,
   ExportResult,
   NotionAPIError,
   SubpageInfo,
@@ -456,6 +457,7 @@ export async function exportNotionDatabase(
   databaseId: string,
   destinationDir: string,
   recursive = false,
+  query?: DatabaseQuery,
 ): Promise<DatabaseItemExportResult[]> {
   logger.log(`Starting export of Notion database ${databaseId}...`)
 
@@ -493,7 +495,7 @@ export async function exportNotionDatabase(
 
     // Query all pages in the database
     logger.log("Querying pages in database...")
-    const pages = await queryDatabase(notion, databaseId)
+    const pages = await queryDatabase(notion, databaseId, query)
     logger.log(`Found ${pages.length} pages in database`)
 
     // Export all pages
@@ -763,6 +765,7 @@ export async function exportNotionResource(
   destinationDir: string,
   recursive = false,
   customFilename?: string,
+  queryString?: string,
 ): Promise<ExportResult | DatabaseItemExportResult[]> {
   logger.log(`Checking resource type for ${resourceId}...`)
 
@@ -783,7 +786,26 @@ export async function exportNotionResource(
 
     if (isDb) {
       logger.log(`Resource ${resourceId} is a database`)
-      return await exportNotionDatabase(resourceId, destinationDir, recursive)
+
+      // Parse query string if provided
+      let query: DatabaseQuery | undefined
+      if (queryString) {
+        try {
+          query = JSON.parse(queryString) as DatabaseQuery
+          logger.log(`Parsed database query: ${JSON.stringify(query, null, 2)}`)
+        } catch (error) {
+          throw new Error(
+            `Invalid query JSON: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        }
+      }
+
+      return await exportNotionDatabase(
+        resourceId,
+        destinationDir,
+        recursive,
+        query,
+      )
     }
     logger.log(`Resource ${resourceId} is a page`)
     return await exportNotionPage(
