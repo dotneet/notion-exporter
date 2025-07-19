@@ -117,9 +117,12 @@ async function convertBlockToMarkdown(
 ): Promise<string> {
   const blockHandlers: Record<string, () => string | Promise<string>> = {
     paragraph: () => convertParagraph(block),
-    heading_1: () => convertHeading1(block),
-    heading_2: () => convertHeading2(block),
-    heading_3: () => convertHeading3(block),
+    heading_1: () =>
+      convertHeading1(block as BlockWithChildren, destinationDir),
+    heading_2: () =>
+      convertHeading2(block as BlockWithChildren, destinationDir),
+    heading_3: () =>
+      convertHeading3(block as BlockWithChildren, destinationDir),
     bulleted_list_item: () => convertBulletedListItem(block),
     numbered_list_item: () => convertNumberedListItem(block, numberedListIndex),
     to_do: () => convertToDo(block),
@@ -197,6 +200,9 @@ async function convertBlockToMarkdown(
       return ""
     },
     table_of_contents: () => convertTableOfContents(allBlocks),
+    column_list: () =>
+      convertColumnList(block as BlockWithChildren, destinationDir),
+    column: () => convertColumn(block as BlockWithChildren, destinationDir),
   }
 
   const handler = blockHandlers[block.type]
@@ -220,31 +226,127 @@ function convertParagraph(block: BlockObjectResponse): string {
 /**
  * Convert heading 1 block
  * @param block Heading 1 block
+ * @param destinationDir Destination directory for assets
  * @returns Markdown text
  */
-function convertHeading1(block: BlockObjectResponse): string {
+async function convertHeading1(
+  block: BlockWithChildren,
+  destinationDir = "",
+): Promise<string> {
   if (block.type !== "heading_1") return ""
-  return `# ${convertRichText(block.heading_1.rich_text)}`
+
+  const headingText = convertRichText(block.heading_1.rich_text)
+
+  // Check if this is a toggle heading
+  if (block.heading_1.is_toggleable && block.has_children && block.children) {
+    logger.log(
+      `Converting toggle heading 1 "${headingText}" with ${block.children.length} children`,
+    )
+    const childContent = await convertBlocksToMarkdown(
+      block.children,
+      destinationDir,
+    )
+
+    // Use details/summary with heading inside
+    return `<details>
+<summary><h1>${headingText}</h1></summary>
+
+${childContent}
+</details>`
+  }
+
+  if (block.heading_1.is_toggleable && block.has_children && !block.children) {
+    logger.warn(
+      `⚠️  Toggle heading 1 "${headingText}" has has_children=true but no children array! This indicates a fetching issue.`,
+    )
+  }
+
+  // Regular heading
+  return `# ${headingText}`
 }
 
 /**
  * Convert heading 2 block
  * @param block Heading 2 block
+ * @param destinationDir Destination directory for assets
  * @returns Markdown text
  */
-function convertHeading2(block: BlockObjectResponse): string {
+async function convertHeading2(
+  block: BlockWithChildren,
+  destinationDir = "",
+): Promise<string> {
   if (block.type !== "heading_2") return ""
-  return `## ${convertRichText(block.heading_2.rich_text)}`
+
+  const headingText = convertRichText(block.heading_2.rich_text)
+
+  // Check if this is a toggle heading
+  if (block.heading_2.is_toggleable && block.has_children && block.children) {
+    logger.log(
+      `Converting toggle heading 2 "${headingText}" with ${block.children.length} children`,
+    )
+    const childContent = await convertBlocksToMarkdown(
+      block.children,
+      destinationDir,
+    )
+
+    // Use details/summary with heading inside
+    return `<details>
+<summary><h2>${headingText}</h2></summary>
+
+${childContent}
+</details>`
+  }
+
+  if (block.heading_2.is_toggleable && block.has_children && !block.children) {
+    logger.warn(
+      `⚠️  Toggle heading 2 "${headingText}" has has_children=true but no children array! This indicates a fetching issue.`,
+    )
+  }
+
+  // Regular heading
+  return `## ${headingText}`
 }
 
 /**
  * Convert heading 3 block
  * @param block Heading 3 block
+ * @param destinationDir Destination directory for assets
  * @returns Markdown text
  */
-function convertHeading3(block: BlockObjectResponse): string {
+async function convertHeading3(
+  block: BlockWithChildren,
+  destinationDir = "",
+): Promise<string> {
   if (block.type !== "heading_3") return ""
-  return `### ${convertRichText(block.heading_3.rich_text)}`
+
+  const headingText = convertRichText(block.heading_3.rich_text)
+
+  // Check if this is a toggle heading
+  if (block.heading_3.is_toggleable && block.has_children && block.children) {
+    logger.log(
+      `Converting toggle heading 3 "${headingText}" with ${block.children.length} children`,
+    )
+    const childContent = await convertBlocksToMarkdown(
+      block.children,
+      destinationDir,
+    )
+
+    // Use details/summary with heading inside
+    return `<details>
+<summary><h3>${headingText}</h3></summary>
+
+${childContent}
+</details>`
+  }
+
+  if (block.heading_3.is_toggleable && block.has_children && !block.children) {
+    logger.warn(
+      `⚠️  Toggle heading 3 "${headingText}" has has_children=true but no children array! This indicates a fetching issue.`,
+    )
+  }
+
+  // Regular heading
+  return `### ${headingText}`
 }
 
 /**
@@ -299,7 +401,18 @@ async function convertToggle(
   // If there are child blocks, convert them recursively
   let content = ""
   if (block.has_children && block.children) {
+    logger.log(
+      `Converting toggle "${summary}" with ${block.children.length} children`,
+    )
     content = await convertBlocksToMarkdown(block.children, destinationDir)
+  } else if (block.has_children && !block.children) {
+    logger.warn(
+      `⚠️  Toggle "${summary}" has has_children=true but no children array! This indicates a fetching issue.`,
+    )
+  } else {
+    logger.debug(
+      `Toggle "${summary}" has no children (has_children=${block.has_children})`,
+    )
   }
 
   // Markdown doesn't directly support toggles, so use details/summary tags
@@ -489,6 +602,63 @@ function convertLinkPreview(block: BlockObjectResponse): string {
   if (block.type !== "link_preview") return ""
 
   return block.link_preview.url
+}
+
+/**
+ * Convert column list block
+ * @param block Column list block
+ * @param destinationDir Destination directory for assets
+ * @returns Markdown text with HTML column structure
+ */
+async function convertColumnList(
+  block: BlockWithChildren,
+  destinationDir = "",
+): Promise<string> {
+  if (block.type !== "column_list") return ""
+
+  // If there are child blocks (columns), convert them recursively
+  let columnsContent = ""
+  if (block.has_children && block.children) {
+    const columnMarkdowns = await Promise.all(
+      block.children.map(async (child) => {
+        if (child.type === "column") {
+          return await convertColumn(child as BlockWithChildren, destinationDir)
+        }
+        return ""
+      }),
+    )
+    columnsContent = columnMarkdowns.filter(Boolean).join("")
+  }
+
+  // Wrap columns in a flex container
+  return `<div style="display: flex; gap: 20px;">
+${columnsContent}</div>`
+}
+
+/**
+ * Convert column block
+ * @param block Column block
+ * @param destinationDir Destination directory for assets
+ * @returns Markdown text wrapped in column div
+ */
+async function convertColumn(
+  block: BlockWithChildren,
+  destinationDir = "",
+): Promise<string> {
+  if (block.type !== "column") return ""
+
+  // If there are child blocks, convert them recursively
+  let content = ""
+  if (block.has_children && block.children) {
+    content = await convertBlocksToMarkdown(block.children, destinationDir)
+  }
+
+  // Wrap content in a column div with flex styling
+  return `<div style="flex: 1;">
+
+${content}
+</div>
+`
 }
 
 /**

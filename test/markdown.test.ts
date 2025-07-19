@@ -3,6 +3,7 @@ import * as fs from "node:fs"
 import * as path from "node:path"
 import type { BlockObjectResponse } from "@notionhq/client/build/src/api-endpoints"
 import { convertBlocksToMarkdown } from "../src/markdown"
+import type { BlockWithChildren } from "../src/types"
 
 describe("Markdown Conversion", () => {
   const TEST_DIR = path.join(process.cwd(), "test", "temp")
@@ -58,7 +59,7 @@ describe("Markdown Conversion", () => {
 
       // Call function
       const result = await convertBlocksToMarkdown(
-        mockBlocks as BlockObjectResponse[],
+        mockBlocks as unknown as BlockObjectResponse[],
         TEST_DIR,
       )
 
@@ -148,7 +149,7 @@ describe("Markdown Conversion", () => {
 
       // Call function
       const result = await convertBlocksToMarkdown(
-        mockBlocks as BlockObjectResponse[],
+        mockBlocks as unknown as BlockObjectResponse[],
         TEST_DIR,
       )
 
@@ -238,7 +239,7 @@ describe("Markdown Conversion", () => {
 
       // Call function
       const result = await convertBlocksToMarkdown(
-        mockBlocks as BlockObjectResponse[],
+        mockBlocks as unknown as BlockObjectResponse[],
         TEST_DIR,
       )
 
@@ -280,7 +281,7 @@ describe("Markdown Conversion", () => {
 
       // Call function
       const result = await convertBlocksToMarkdown(
-        mockBlocks as BlockObjectResponse[],
+        mockBlocks as unknown as BlockObjectResponse[],
         TEST_DIR,
       )
 
@@ -377,7 +378,7 @@ describe("Markdown Conversion", () => {
 
       // Call function
       const result = await convertBlocksToMarkdown(
-        mockBlocks as BlockObjectResponse[],
+        mockBlocks as unknown as BlockObjectResponse[],
         TEST_DIR,
       )
 
@@ -400,7 +401,7 @@ describe("Markdown Conversion", () => {
 
       // Call function
       const result = await convertBlocksToMarkdown(
-        mockBlocks as BlockObjectResponse[],
+        mockBlocks as unknown as BlockObjectResponse[],
         TEST_DIR,
       )
 
@@ -500,7 +501,7 @@ describe("Markdown Conversion", () => {
 
       // Call function
       const result = await convertBlocksToMarkdown(
-        mockBlocks as BlockObjectResponse[],
+        mockBlocks as unknown as BlockObjectResponse[],
         TEST_DIR,
       )
 
@@ -549,7 +550,7 @@ describe("Markdown Conversion", () => {
 
       // Call function
       const result = await convertBlocksToMarkdown(
-        mockBlocks as BlockObjectResponse[],
+        mockBlocks as unknown as BlockObjectResponse[],
         TEST_DIR,
       )
 
@@ -599,7 +600,7 @@ describe("Markdown Conversion", () => {
 
       // Call function
       const result = await convertBlocksToMarkdown(
-        mockBlocks as BlockObjectResponse[],
+        mockBlocks as unknown as BlockObjectResponse[],
         TEST_DIR,
       )
 
@@ -672,7 +673,7 @@ describe("Markdown Conversion", () => {
 
       // Call function
       const result = await convertBlocksToMarkdown(
-        mockBlocks as BlockObjectResponse[],
+        mockBlocks as unknown as BlockObjectResponse[],
         TEST_DIR,
       )
 
@@ -746,7 +747,7 @@ describe("Markdown Conversion", () => {
 
       // Call function
       const result = await convertBlocksToMarkdown(
-        mockBlocks as BlockObjectResponse[],
+        mockBlocks as unknown as BlockObjectResponse[],
         TEST_DIR,
       )
 
@@ -755,6 +756,459 @@ describe("Markdown Conversion", () => {
         '- [Step #1: "Hello World"](#Step-1-Hello-World-)',
       )
       expect(result).toContain("  - [機能 #2: 'テスト'](#機能-2-テスト-)")
+    })
+
+    test("should convert column_list blocks", async () => {
+      // Mock column_list block with two columns
+      const mockBlocks: Partial<BlockObjectResponse>[] = [
+        {
+          id: "column-list-1",
+          type: "column_list",
+          column_list: {},
+          has_children: true,
+          children: [
+            {
+              id: "column-1",
+              type: "column",
+              column: {},
+              has_children: true,
+              children: [
+                {
+                  id: "para-1",
+                  type: "paragraph",
+                  paragraph: {
+                    rich_text: [
+                      {
+                        type: "text",
+                        text: { content: "Left column content", link: null },
+                        annotations: {
+                          bold: false,
+                          italic: false,
+                          strikethrough: false,
+                          underline: false,
+                          code: false,
+                          color: "default",
+                        },
+                        plain_text: "Left column content",
+                        href: null,
+                      },
+                    ],
+                    color: "default",
+                  },
+                  has_children: false,
+                },
+              ],
+            },
+            {
+              id: "column-2",
+              type: "column",
+              column: {},
+              has_children: true,
+              children: [
+                {
+                  id: "para-2",
+                  type: "paragraph",
+                  paragraph: {
+                    rich_text: [
+                      {
+                        type: "text",
+                        text: { content: "Right column content", link: null },
+                        annotations: {
+                          bold: false,
+                          italic: false,
+                          strikethrough: false,
+                          underline: false,
+                          code: false,
+                          color: "default",
+                        },
+                        plain_text: "Right column content",
+                        href: null,
+                      },
+                    ],
+                    color: "default",
+                  },
+                  has_children: false,
+                },
+              ],
+            },
+          ],
+        },
+      ]
+
+      // Call function
+      const result = await convertBlocksToMarkdown(
+        mockBlocks as unknown as BlockObjectResponse[],
+        TEST_DIR,
+      )
+
+      // Verify column structure and content
+      expect(result).toContain('<div style="display: flex; gap: 20px;">')
+      expect(result).toContain('<div style="flex: 1;">')
+      expect(result).toContain("Left column content")
+      expect(result).toContain("Right column content")
+      expect(result).toContain("</div>")
+    })
+
+    test("should handle empty column_list", async () => {
+      // Mock empty column_list block
+      const mockBlocks: Partial<BlockObjectResponse>[] = [
+        {
+          id: "column-list-1",
+          type: "column_list",
+          column_list: {},
+          has_children: false,
+        },
+      ]
+
+      // Call function
+      const result = await convertBlocksToMarkdown(
+        mockBlocks as unknown as BlockObjectResponse[],
+        TEST_DIR,
+      )
+
+      // Verify empty column_list handling
+      expect(result).toContain('<div style="display: flex; gap: 20px;">')
+      expect(result).toContain("</div>")
+    })
+
+    test("should handle column with multiple blocks", async () => {
+      // Mock column with multiple child blocks
+      const mockBlocks: Partial<BlockObjectResponse>[] = [
+        {
+          id: "column-list-1",
+          type: "column_list",
+          column_list: {},
+          has_children: true,
+          children: [
+            {
+              id: "column-1",
+              type: "column",
+              column: {},
+              has_children: true,
+              children: [
+                {
+                  id: "heading-1",
+                  type: "heading_2",
+                  heading_2: {
+                    rich_text: [
+                      {
+                        type: "text",
+                        text: { content: "Column Title", link: null },
+                        annotations: {
+                          bold: false,
+                          italic: false,
+                          strikethrough: false,
+                          underline: false,
+                          code: false,
+                          color: "default",
+                        },
+                        plain_text: "Column Title",
+                        href: null,
+                      },
+                    ],
+                    color: "default",
+                    is_toggleable: false,
+                  },
+                  has_children: false,
+                },
+                {
+                  id: "para-1",
+                  type: "paragraph",
+                  paragraph: {
+                    rich_text: [
+                      {
+                        type: "text",
+                        text: { content: "Column paragraph", link: null },
+                        annotations: {
+                          bold: false,
+                          italic: false,
+                          strikethrough: false,
+                          underline: false,
+                          code: false,
+                          color: "default",
+                        },
+                        plain_text: "Column paragraph",
+                        href: null,
+                      },
+                    ],
+                    color: "default",
+                  },
+                  has_children: false,
+                },
+              ],
+            },
+          ],
+        },
+      ]
+
+      // Call function
+      const result = await convertBlocksToMarkdown(
+        mockBlocks as unknown as BlockObjectResponse[],
+        TEST_DIR,
+      )
+
+      // Verify multiple blocks within column
+      expect(result).toContain("## Column Title")
+      expect(result).toContain("Column paragraph")
+      expect(result).toContain('<div style="flex: 1;">')
+    })
+
+    test("should convert toggle blocks with children", async () => {
+      // Mock toggle block with children
+      const mockBlocks = [
+        {
+          id: "toggle-1",
+          type: "toggle",
+          toggle: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "Click to expand", link: null },
+                annotations: {
+                  bold: false,
+                  italic: false,
+                  strikethrough: false,
+                  underline: false,
+                  code: false,
+                  color: "default",
+                },
+                plain_text: "Click to expand",
+                href: null,
+              },
+            ],
+            color: "default",
+          },
+          has_children: true,
+          children: [
+            {
+              id: "child-1",
+              type: "paragraph",
+              paragraph: {
+                rich_text: [
+                  {
+                    type: "text",
+                    text: {
+                      content: "This content is inside the toggle",
+                      link: null,
+                    },
+                    annotations: {
+                      bold: false,
+                      italic: false,
+                      strikethrough: false,
+                      underline: false,
+                      code: false,
+                      color: "default",
+                    },
+                    plain_text: "This content is inside the toggle",
+                    href: null,
+                  },
+                ],
+                color: "default",
+              },
+              has_children: false,
+            },
+            {
+              id: "child-2",
+              type: "bulleted_list_item",
+              bulleted_list_item: {
+                rich_text: [
+                  {
+                    type: "text",
+                    text: { content: "Bullet point inside toggle", link: null },
+                    annotations: {
+                      bold: false,
+                      italic: false,
+                      strikethrough: false,
+                      underline: false,
+                      code: false,
+                      color: "default",
+                    },
+                    plain_text: "Bullet point inside toggle",
+                    href: null,
+                  },
+                ],
+                color: "default",
+              },
+              has_children: false,
+            },
+          ],
+        },
+      ]
+
+      // Call function
+      const result = await convertBlocksToMarkdown(
+        mockBlocks as unknown as BlockObjectResponse[],
+        TEST_DIR,
+      )
+
+      // Verify toggle structure
+      expect(result).toContain("<details>")
+      expect(result).toContain("<summary>Click to expand</summary>")
+      expect(result).toContain("This content is inside the toggle")
+      expect(result).toContain("- Bullet point inside toggle")
+      expect(result).toContain("</details>")
+    })
+
+    test("should convert toggle blocks without children", async () => {
+      // Mock toggle block without children
+      const mockBlocks = [
+        {
+          id: "toggle-2",
+          type: "toggle",
+          toggle: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "Empty toggle", link: null },
+                annotations: {
+                  bold: false,
+                  italic: false,
+                  strikethrough: false,
+                  underline: false,
+                  code: false,
+                  color: "default",
+                },
+                plain_text: "Empty toggle",
+                href: null,
+              },
+            ],
+            color: "default",
+          },
+          has_children: false,
+        },
+      ]
+
+      // Call function
+      const result = await convertBlocksToMarkdown(
+        mockBlocks as unknown as BlockObjectResponse[],
+        TEST_DIR,
+      )
+
+      // Verify empty toggle structure
+      expect(result).toContain("<details>")
+      expect(result).toContain("<summary>Empty toggle</summary>")
+      expect(result).toContain("</details>")
+      // Should not contain extra content between summary and closing tag
+      const cleanResult = result.replace(/\s+/g, " ").trim()
+      expect(cleanResult).toMatch(
+        /<summary>Empty toggle<\/summary>\s*<\/details>/,
+      )
+    })
+
+    test("should convert toggle headings with children", async () => {
+      // Mock toggle heading with children
+      const mockBlocks = [
+        {
+          id: "toggle-heading-1",
+          type: "heading_2",
+          heading_2: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "Toggle Heading Example", link: null },
+                annotations: {
+                  bold: false,
+                  italic: false,
+                  strikethrough: false,
+                  underline: false,
+                  code: false,
+                  color: "default",
+                },
+                plain_text: "Toggle Heading Example",
+                href: null,
+              },
+            ],
+            color: "default",
+            is_toggleable: true,
+          },
+          has_children: true,
+          children: [
+            {
+              id: "child-para-1",
+              type: "paragraph",
+              paragraph: {
+                rich_text: [
+                  {
+                    type: "text",
+                    text: {
+                      content: "This content is inside the toggle heading",
+                      link: null,
+                    },
+                    annotations: {
+                      bold: false,
+                      italic: false,
+                      strikethrough: false,
+                      underline: false,
+                      code: false,
+                      color: "default",
+                    },
+                    plain_text: "This content is inside the toggle heading",
+                    href: null,
+                  },
+                ],
+                color: "default",
+              },
+              has_children: false,
+            },
+          ],
+        },
+      ]
+
+      // Call function
+      const result = await convertBlocksToMarkdown(
+        mockBlocks as unknown as BlockObjectResponse[],
+        TEST_DIR,
+      )
+
+      // Verify toggle heading structure
+      expect(result).toContain("<details>")
+      expect(result).toContain(
+        "<summary><h2>Toggle Heading Example</h2></summary>",
+      )
+      expect(result).toContain("This content is inside the toggle heading")
+      expect(result).toContain("</details>")
+    })
+
+    test("should convert regular headings (non-toggle)", async () => {
+      // Mock regular heading without toggle
+      const mockBlocks = [
+        {
+          id: "regular-heading-1",
+          type: "heading_2",
+          heading_2: {
+            rich_text: [
+              {
+                type: "text",
+                text: { content: "Regular Heading", link: null },
+                annotations: {
+                  bold: false,
+                  italic: false,
+                  strikethrough: false,
+                  underline: false,
+                  code: false,
+                  color: "default",
+                },
+                plain_text: "Regular Heading",
+                href: null,
+              },
+            ],
+            color: "default",
+            is_toggleable: false,
+          },
+          has_children: false,
+        },
+      ]
+
+      // Call function
+      const result = await convertBlocksToMarkdown(
+        mockBlocks as unknown as BlockObjectResponse[],
+        TEST_DIR,
+      )
+
+      // Verify regular heading structure
+      expect(result).toContain("## Regular Heading")
+      expect(result).not.toContain("<details>")
+      expect(result).not.toContain("<summary>")
     })
   })
 })
