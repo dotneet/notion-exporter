@@ -14,6 +14,7 @@ import type {
 import type {
   BlockWithChildren,
   DatabaseMetadata,
+  DatabaseQuery,
   NotionAPIError,
   SubpageInfo,
 } from "./types"
@@ -357,18 +358,25 @@ export async function getDatabase(
  * Query database pages
  * @param notion Notion API client
  * @param databaseId Database ID
+ * @param query Optional query parameters for filtering and sorting
  * @returns Array of pages in the database
  */
 export async function queryDatabase(
   notion: Client,
   databaseId: string,
+  query?: DatabaseQuery,
 ): Promise<PageObjectResponse[]> {
   const pages: PageObjectResponse[] = []
   let cursor: string | undefined
   let pageCount = 0
 
   try {
-    logger.log(`Querying database ${databaseId}...`)
+    if (query) {
+      logger.log(`Querying database ${databaseId} with custom query...`)
+      logger.log(`Query: ${JSON.stringify(query, null, 2)}`)
+    } else {
+      logger.log(`Querying database ${databaseId}...`)
+    }
 
     // Get all pages using pagination
     do {
@@ -377,6 +385,7 @@ export async function queryDatabase(
 
       const params: QueryDatabaseParameters = {
         database_id: databaseId,
+        ...query,
       }
 
       if (cursor) {

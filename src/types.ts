@@ -137,6 +137,33 @@ export interface DatabaseItem {
 }
 
 /**
+ * Database query parameters (based on Notion API)
+ */
+export interface DatabaseQuery {
+  filter?: {
+    and?: DatabaseFilter[]
+    or?: DatabaseFilter[]
+    property?: string
+    [key: string]: unknown
+  }
+  sorts?: Array<{
+    property: string
+    direction: "ascending" | "descending"
+  }>
+  start_cursor?: string
+  page_size?: number
+  filter_properties?: string[]
+}
+
+/**
+ * Database filter condition
+ */
+export interface DatabaseFilter {
+  property: string
+  [key: string]: unknown
+}
+
+/**
  * Block with database content
  */
 export interface BlockWithDatabaseContent extends BlockObjectResponse {
