@@ -182,8 +182,7 @@ async function convertBlockToMarkdown(
               // Special handling for title column - make it a link
               if (index === 0 && titleProp && prop === titleProp) {
                 const titleValue = value || "Untitled"
-                const filename = getSafeFilename(titleValue)
-                return `[${titleValue}](databases/${block.id}/${filename}.md)`
+                return `[${titleValue}](databases/${block.id}/${item.id}.md)`
               }
 
               if (value === undefined || value === null) return ""
